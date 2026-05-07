@@ -255,13 +255,22 @@ class DownloadWorker(QThread):
                 raise Exception(f"HTTP Chyba: {response.status_code}")
 
             downloaded = 0
+            last_percent = -1 # Přidáno: Paměť pro poslední odeslané procento
+            
             with open(target_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
+                # ZMĚNA 1: Zvětšený chunk_size na 1 MB (1048576 bytů) pro bleskové stahování
+                for chunk in response.iter_content(chunk_size=1048576):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
+                        
                         if self.total_size > 0:
-                            self.progress.emit(int((downloaded / self.total_size) * 100))
+                            current_percent = int((downloaded / self.total_size) * 100)
+                            # ZMĚNA 2: Signál pošleme POUZE, pokud se procento opravdu zvedlo.
+                            # Tím zabráníme zamrznutí UI a stahování proletí rychlostí blesku.
+                            if current_percent > last_percent:
+                                self.progress.emit(current_percent)
+                                last_percent = current_percent
 
             self.finished.emit(target_path)
         except Exception as e:
