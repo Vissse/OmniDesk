@@ -356,48 +356,20 @@ class AppUpdater(QObject):
 
     def perform_restart_6_3_logic(self, downloaded_file_path):
         try:
-            current_exe_path = Path(sys.executable).resolve()
-            if not str(current_exe_path).lower().endswith(".exe"):
-                dlg = ModernMessageDialog(self.parent, "Dev Mode", f"Staženo do:\n{downloaded_file_path}")
-                dlg.exec()
-                return
-
-            temp_dir = tempfile.gettempdir()
-            bat_path = os.path.join(temp_dir, f"updater_winget_{random.randint(1000,9999)}.bat")
+            # ZMĚNA: downloaded_file_path je nyní instalační soubor z Inno Setupu
             
-            clean_env = os.environ.copy()
-            clean_env.pop('_MEIPASS2', None)
-            clean_env.pop('_MEIPASS', None)
+            # Parametry pro Inno Setup:
+            # /SILENT = Ukáže jen progress bar, ale uživatel nemusí nic klikat
+            # /SUPPRESSMSGBOXES = Potlačí zbytečné hlášky
+            # /NOCANCEL = Zakáže zrušení updatu uprostřed procesu
+            cmd = [downloaded_file_path, "/SILENT", "/SUPPRESSMSGBOXES", "/NOCANCEL"]
             
-            bat_content = f"""
-@echo off
-chcp 65001 > nul
-taskkill /F /PID {os.getpid()} > nul 2>&1
-timeout /t 2 /nobreak > nul
-
-:LOOP
-del "{str(current_exe_path)}" 2>nul
-if exist "{str(current_exe_path)}" (
-    timeout /t 1 > nul
-    goto LOOP
-)
-
-move /Y "{downloaded_file_path}" "{str(current_exe_path)}" > nul
-
-echo Spoustim pres Explorer (Breakaway)...
-explorer.exe "{str(current_exe_path)}"
-
-(goto) 2>nul & del "%~f0"
-"""
-            with open(bat_path, "w", encoding="utf-8") as f:
-                f.write(bat_content)
-
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            # Spustíme stažený instalátor
+            subprocess.Popen(cmd)
             
-            subprocess.Popen(str(bat_path), shell=True, env=clean_env, startupinfo=startupinfo)
+            # Okamžitě vypneme aktuální aplikaci, aby Inno Setup mohl soubory bezpečně přepsat
             QApplication.quit()
             sys.exit()
 
         except Exception as e:
-            QMessageBox.critical(self.parent, "Chyba", f"Instalace selhala:\n{e}")
+            QMessageBox.critical(self.parent, "Chyba", f"Spuštění aktualizace selhalo:\n{e}")
