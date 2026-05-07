@@ -6,7 +6,7 @@ from pathlib import Path
 CURRENT_VERSION = "7.6.5"
 
 try:
-    _docs_dir = Path.home() / "Documents" / "AI_Winget_Installer"
+    _docs_dir = Path.home() / "Documents" / "OmniDesk"
     _docs_dir.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE = str(_docs_dir / "user_settings.json")
     OUTPUT_FILE = str(_docs_dir / "install_apps.bat")
