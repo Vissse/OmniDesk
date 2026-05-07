@@ -2,7 +2,7 @@ import os
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
-from core.config import COLORS
+from core.config import COLORS, CURRENT_VERSION
 from core.config import resource_path
 
 class FunctionRow(QWidget):
@@ -98,25 +98,25 @@ class HomePage(QWidget):
         funcs_layout.addWidget(FunctionRow(
             "trash-simple-thin.png", "Odinstalace aplikací", 
             "Přehledný seznam všech nainstalovaných programů s možností jejich čistého odstranění.",
-            "#d63031"
+            COLORS['danger']
         ))
         
         funcs_layout.addWidget(FunctionRow(
             "heartbeat-thin.png", "Kontrola stavu PC", 
             "Sada diagnostických nástrojů: kontrola systémových souborů, stav baterie, čištění disku a optimalizace.",
-            "#0984e3"
+            COLORS['accent']
         ))
         
         funcs_layout.addWidget(FunctionRow(
             "desktop-thin.png", "Specifikace PC", 
             "Detailní výpis hardwarových komponent vašeho počítače (Procesor, Grafika, RAM, Základní deska).",
-            "#6c5ce7"
+            COLORS['accent']
         ))
 
         main_layout.addLayout(funcs_layout)
         main_layout.addStretch()
         
-        lbl_footer = QLabel("OmniDesk v2.0 • Všestranný správce systému")
+        lbl_footer = QLabel(f"OmniDesk v{CURRENT_VERSION} • Všestranný správce systému")
         lbl_footer.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 11px; margin-top: 20px;")
         lbl_footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(lbl_footer)
