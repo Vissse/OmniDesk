@@ -28,11 +28,19 @@ except ImportError:
 
 # --- LOGIKA ZÍSKÁVÁNÍ DAT PC ---
 
-# Pomocná funkce pro bezpečné spuštění PowerShellu bez blikání CMD
 def _run_ps(cmd):
     try:
-        # 0x08000000 = CREATE_NO_WINDOW (zabrání probliknutí černé konzole)
-        return subprocess.check_output(cmd, shell=True, creationflags=0x08000000).decode(errors='ignore').strip()
+        # PŘIDÁNO: timeout=5 a DEVNULL zajistí, že to nikdy nezamrzne navždy
+        return subprocess.check_output(
+            cmd, 
+            shell=True, 
+            timeout=5, 
+            stdin=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL, 
+            creationflags=0x08000000
+        ).decode(errors='ignore').strip()
+    except subprocess.TimeoutExpired:
+        return "" # Pokud to trvá víc jak 5s, ignorujeme to
     except:
         return ""
 
@@ -81,7 +89,6 @@ def get_gpu_vendor_from_id(pnp_id):
     return ""
 
 def get_pc_specs(progress_callback=None):
-    # Pomocná funkce pro hlášení progresu Splashi
     def report(msg):
         if progress_callback:
             progress_callback(msg)
@@ -184,7 +191,7 @@ def get_pc_specs(progress_callback=None):
                             if isinstance(ram_out, list): ram_out = ram_out[0]
                             wmi_bytes = ram_out.get("AdapterRAM", 0)
                             if wmi_bytes:
-                                if wmi_bytes < 0: wmi_bytes += 2**32 # Oprava overflow
+                                if wmi_bytes < 0: wmi_bytes += 2**32 
                                 gb_val = wmi_bytes / (1024**3)
                                 vram_final_gb = f"{round(gb_val)} GB"
                     except: pass
@@ -495,8 +502,8 @@ class SpecsPage(QWidget):
         main_layout.addLayout(header_row)
 
         top_bar = QHBoxLayout()
-        top_bar.addWidget(InfoHeaderCard("desktop-thin.png", "Název zařízení", self.specs['pc_name']))
-        top_bar.addWidget(InfoHeaderCard("windows-logo-thin.png", "Operační systém", self.specs['os']))
+        top_bar.addWidget(InfoHeaderCard("desktop-thin.png", "Název zařízení", self.specs.get('pc_name', 'Neznámé')))
+        top_bar.addWidget(InfoHeaderCard("windows-logo-thin.png", "Operační systém", self.specs.get('os', 'Neznámé')))
         top_bar.addWidget(InfoHeaderCard("circuitry-thin.png", "Architektura", platform.machine()))
         top_bar.addStretch(); main_layout.addLayout(top_bar)
 
@@ -540,7 +547,7 @@ class SpecsPage(QWidget):
         for i, item in enumerate(self.nav_items): item.set_active(i == idx)
 
     def create_mobo_page(self):
-        m = self.specs['mobo']
+        m = self.specs.get('mobo', {})
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
@@ -553,10 +560,10 @@ class SpecsPage(QWidget):
         h_cont.addWidget(lbl_info); h_cont.addStretch()
         l.addLayout(h_cont)
         
-        l.addWidget(MoboRow("Výrobce", m['vendor']))
-        l.addWidget(MoboRow("Model", m['product']))
-        l.addWidget(MoboRow("BIOS Verze", m['bios']))
-        l.addWidget(MoboRow("Sériové číslo", m['serial']))
+        l.addWidget(MoboRow("Výrobce", m.get('vendor', 'Neznámé')))
+        l.addWidget(MoboRow("Model", m.get('product', 'Neznámé')))
+        l.addWidget(MoboRow("BIOS Verze", m.get('bios', 'Neznámé')))
+        l.addWidget(MoboRow("Sériové číslo", m.get('serial', 'Neznámé')))
         
         l.addStretch(); scroll.setWidget(content)
         return scroll
@@ -575,7 +582,7 @@ class SpecsPage(QWidget):
         l.addLayout(h_cont)
         
         details = self.specs.get("cpu_details", {})
-        l.addWidget(MoboRow("Model", self.specs['cpu']))
+        l.addWidget(MoboRow("Model", self.specs.get('cpu', 'Neznámé')))
         
         if details:
             l.addWidget(MoboRow("Jádra / Vlákna", details.get('cores', 'N/A')))
@@ -604,7 +611,7 @@ class SpecsPage(QWidget):
         l.addLayout(h_cont)
         
         details = self.specs.get("gpu_details", {})
-        l.addWidget(MoboRow("Model", self.specs['gpu']))
+        l.addWidget(MoboRow("Model", self.specs.get('gpu', 'Neznámé')))
 
         if details:
             l.addWidget(MoboRow("Video Paměť (VRAM)", details.get('vram', 'N/A')))
@@ -616,16 +623,20 @@ class SpecsPage(QWidget):
 
     def create_summary_page(self):
         page = QWidget(); l = QVBoxLayout(page); l.setContentsMargins(0,0,0,0); l.setSpacing(12)
-        l.addWidget(AnimatedCard("Procesor", self.specs['cpu']))
+        l.addWidget(AnimatedCard("Procesor", self.specs.get('cpu', 'Neznámé')))
         
-        gpu_label = self.specs['gpu']
+        gpu_label = self.specs.get('gpu', 'Neznámé')
         vram = self.specs.get('gpu_details', {}).get('vram', '')
         if vram and vram != "Neznámá":
             gpu_label += f" {vram}"
             
         l.addWidget(AnimatedCard("Grafická karta", gpu_label))
-        l.addWidget(AnimatedCard("Základní deska", f"{self.specs['mobo']['vendor']} {self.specs['mobo']['product']}"))
-        l.addWidget(AnimatedCard("Paměť RAM", self.specs['ram']))
+        
+        m_vendor = self.specs.get('mobo', {}).get('vendor', '')
+        m_product = self.specs.get('mobo', {}).get('product', '')
+        l.addWidget(AnimatedCard("Základní deska", f"{m_vendor} {m_product}"))
+        
+        l.addWidget(AnimatedCard("Paměť RAM", self.specs.get('ram', 'Neznámé')))
         l.addStretch(); return page
 
     def create_ram_page(self):
@@ -641,7 +652,7 @@ class SpecsPage(QWidget):
         h_cont.addWidget(lbl_info); h_cont.addStretch()
         l.addLayout(h_cont)
 
-        l.addWidget(MoboRow("Celková kapacita", self.specs['ram']))
+        l.addWidget(MoboRow("Celková kapacita", self.specs.get('ram', 'Neznámé')))
         
         for i, det in enumerate(self.specs.get('ram_details', [])):
             l.addWidget(MoboRow(f"Slot {i+1}", det))

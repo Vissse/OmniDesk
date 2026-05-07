@@ -332,22 +332,27 @@ class AppUpdater(QObject):
             self.on_continue()
 
     def prompt_update(self, ver, url, size):
-        dlg = ModernMessageDialog(
-            self.parent, 
-            "Nová aktualizace", 
-            f"Je k dispozici nová verze OmniDesk {ver}.<br>Přejete si ji nainstalovat?",
-            btn_text="Aktualizovat",
-            show_cancel=True
-        )
-        
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            dl = UpdateDownloadDialog(self.parent, url, size, self.perform_restart_6_3_logic)
-            dl.exec()
-            if dl.result() == QDialog.DialogCode.Rejected and self.on_continue:
+            # ZMĚNA: První argument je None místo self.parent
+            # Díky tomu je dialog zcela nezávislý na skrytém hlavním okně
+            dlg = ModernMessageDialog(
+                None, 
+                "Nová aktualizace", 
+                f"Je k dispozici nová verze OmniDesk {ver}.<br>Přejete si ji nainstalovat?",
+                btn_text="Aktualizovat",
+                show_cancel=True
+            )
+            
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                # ZMĚNA: Opět None místo self.parent
+                dl = UpdateDownloadDialog(None, url, size, self.perform_restart_6_3_logic)
+                dl.exec()
+                
+                # Pokud uživatel zruší stahování křížkem, spustíme hlavní appku
+                if dl.result() == QDialog.DialogCode.Rejected and self.on_continue:
+                    self.on_continue()
+            elif self.on_continue:
+                # Pokud uživatel klikne na "Zrušit", zobrazí se hlavní aplikace
                 self.on_continue()
-        elif self.on_continue:
-            # Uživatel kliknul na Zrušit, zavolá se callback (Zobrazení hlavního okna)
-            self.on_continue()
 
     def perform_restart_6_3_logic(self, downloaded_file_path):
         try:

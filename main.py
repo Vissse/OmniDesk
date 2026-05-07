@@ -6,9 +6,24 @@ import time
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QListWidget, QListWidgetItem, QStackedWidget, QPushButton, 
-                             QFrame, QLabel, QStyledItemDelegate, QStyle)
+                             QFrame, QLabel, QStyledItemDelegate, QStyle, QMessageBox)
 from PyQt6.QtCore import QSize, Qt, QTimer, QVariantAnimation, QRect, QPoint, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QPixmap, QColor, QFont, QPainter, QPainterPath
+
+# Globální zachytávač chyb - pokud cokoliv spadne, ukáže se chybová tabulka
+def global_exception_handler(exctype, value, tb):
+    import traceback
+    error_msg = "".join(traceback.format_exception(exctype, value, tb))
+    print(error_msg)
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Icon.Critical)
+    msg.setWindowTitle("Kritická chyba")
+    msg.setText("Aplikace narazila na kritickou chybu.")
+    msg.setDetailedText(error_msg)
+    msg.exec()
+    sys.exit(1)
+
+sys.excepthook = global_exception_handler
 
 # Importy
 from UI import styles
@@ -27,9 +42,8 @@ from core import boot_system
 from core.updater import AppUpdater
 from UI.view_specs import get_pc_specs
 
-# --- Definice globální proměnné pro okno, aby ho Python nesmazal ---
 window = None
-final_specs = None # Sem uložíme načtená data
+final_specs = None 
 
 class AnimatedListWidget(QListWidget):
     def __init__(self, parent=None):
@@ -256,7 +270,6 @@ class MainWindow(QMainWindow):
             windll.dwmapi.DwmSetWindowAttribute(hwnd, 36, byref(c_int(0x00FFFFFF)), 4)
         except: pass
 
-
 class InitWorker(QThread):
     progress_update = pyqtSignal(int, str)
     
@@ -267,30 +280,30 @@ class InitWorker(QThread):
             time.sleep(0.2)
             
             self.progress_update.emit(20, "Inicializace HW skeneru...")
-            
-            # Tato vnitřní funkce pošle hlášku do Splashe při každém novém zjištění
             def hw_progress(msg):
                 self.progress_update.emit(50, msg)
                 
-            # Přidáno předání progresu do funkce
             final_specs = get_pc_specs(progress_callback=hw_progress) 
             
             self.progress_update.emit(90, "Příprava rozhraní...")
             time.sleep(0.2)
-            
-            self.progress_update.emit(100, "Hotovo!")
         except Exception as e:
-            print(f"Chyba při inicializaci: {e}")
+            print(f"Chyba při inicializaci HW: {e}")
+        finally:
+            # TOTO GARANTUJE, ŽE SE SPLASH ZAVŘE I KDYŽ NĚCO SPADNE!
+            self.progress_update.emit(100, "Spouštím aplikaci!")
+
+def show_main_window():
+    # Jakmile se má ukázat hlavní okno, vrátíme PyQt do normálu (když ho zavřeš křížkem, vypne se)
+    QApplication.instance().setQuitOnLastWindowClosed(True)
+    window.show()
 
 def start_program():
     global window, final_specs
-    # Pouze vytvoříme okno do paměti, ALE NEZOBRAZÍME HO (chybí window.show())
     window = MainWindow(specs=final_specs)
     
-    # Spustíme kontrolu aktualizací tiše na pozadí.
-    # Pokud update NENÍ, nebo uživatel klikne na "Zrušit", 
-    # spustí se callback "on_continue", který teprve teď okno zobrazí.
-    window.updater.check_for_updates(silent=True, on_continue=window.show)
+    # Místo window.show pošleme naši novou funkci
+    window.updater.check_for_updates(silent=True, on_continue=show_main_window)
 
 if __name__ == "__main__":
     if os.name == 'nt': 
@@ -299,6 +312,10 @@ if __name__ == "__main__":
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
     app = QApplication(sys.argv)
+    
+    # --- TENTO ŘÁDEK ZABRÁNÍ PÁDU ---
+    # Říká: "Nevypínej celou aplikaci jen proto, že zmizel Splash Screen"
+    app.setQuitOnLastWindowClosed(False)
     
     icon_path = resource_path("assets/icons/program_icon.png")
     if os.path.exists(icon_path):
