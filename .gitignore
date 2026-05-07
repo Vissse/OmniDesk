@@ -25,3 +25,6 @@ build/
 
 build.py
 view_installer_old.py
+
+inno.iss
+OmniDesk.code-workspace
