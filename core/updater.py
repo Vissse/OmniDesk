@@ -10,14 +10,15 @@ from packaging import version
 from PyQt6.QtCore import QObject, pyqtSignal, QThread, Qt, QTimer, QSize
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QProgressBar, 
                              QPushButton, QWidget, QApplication, QHBoxLayout, QGraphicsDropShadowEffect, QMessageBox)
-from PyQt6.QtGui import QMouseEvent, QColor, QCursor
+from PyQt6.QtGui import QMouseEvent, QColor, QCursor, QIcon
 
 # Konfigurace
 try:
-    from core.config import CURRENT_VERSION, COLORS
+    from core.config import CURRENT_VERSION, COLORS, resource_path
 except ImportError:
     CURRENT_VERSION = "0.0.0"
     COLORS = {'bg_main': '#1e1e1e', 'bg_sidebar': '#252526', 'accent': '#0078d4', 'text': '#ffffff', 'border': '#333', 'sub_text': '#aaaaaa'}
+    def resource_path(p): return p
 
 GITHUB_USER = "Vissse"
 REPO_NAME = "OmniDesk"
@@ -29,17 +30,22 @@ REPO_NAME = "OmniDesk"
 class ModernMessageDialog(QDialog):
     def __init__(self, parent, title, message, btn_text="OK", show_cancel=False):
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        
+        # ZMĚNA: Použijeme Qt.WindowType.Window místo Dialog, 
+        # aby se ikonka vždy ukázala v liště Windows, i když je hlavní okno skryté.
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
-        # Velikost okna
-        self.setFixedSize(420, 220)
+        # PŘIDÁNO: Nastavení ikony okna pro hlavní panel Windows
+        icon_path = resource_path("assets/icons/program_icon.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
+        self.setFixedSize(420, 220)
         self.old_pos = None
 
-        # Hlavní kontejner
         container = QWidget(self)
-        container.setGeometry(10, 10, 400, 200) # Odsazení pro stín
+        container.setGeometry(10, 10, 400, 200)
         
         bg = COLORS.get('bg_sidebar', '#252526')
         border = COLORS.get('border', '#444')
@@ -57,20 +63,17 @@ class ModernMessageDialog(QDialog):
         layout.setContentsMargins(30, 25, 30, 25)
         layout.setSpacing(10)
 
-        # 1. Nadpis
         lbl_title = QLabel(title)
         lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {COLORS.get('fg', 'white')};")
         layout.addWidget(lbl_title)
         
-        # 2. Zpráva (Centrovaná)
         lbl_msg = QLabel(message)
         lbl_msg.setWordWrap(True)
         lbl_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_msg.setStyleSheet(f"font-size: 14px; color: {COLORS.get('sub_text', '#aaaaaa')}; margin-bottom: 5px;")
         layout.addWidget(lbl_msg)
 
-        # 3. Tlačítka
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
         btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -88,7 +91,6 @@ class ModernMessageDialog(QDialog):
 
         layout.addLayout(btn_layout)
 
-        # Stín
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(25)
         shadow.setXOffset(0)
@@ -153,8 +155,15 @@ class ModernMessageDialog(QDialog):
 class UpdateDownloadDialog(QDialog):
     def __init__(self, parent, url, size, on_success):
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        
+        # ZMĚNA ZDE TAKÉ: WindowType.Window + Ikona okna
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        icon_path = resource_path("assets/icons/program_icon.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+            
         self.setFixedSize(420, 180)
         
         container = QWidget(self)
@@ -189,13 +198,11 @@ class UpdateDownloadDialog(QDialog):
 
         self.pbar = QProgressBar()
         self.pbar.setRange(0, 100)
-        self.pbar.setTextVisible(False)  # <--- ZAJISTÍ, ŽE TEXT NEBUDE UVNITŘ BARU
+        self.pbar.setTextVisible(False)  
         layout.addWidget(self.pbar)
 
         self.lbl_status = QLabel("0%")
         self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        # <--- ZMĚNA BARVY ZDE (použito COLORS.get('accent'))
         self.lbl_status.setStyleSheet(f"color: {COLORS.get('accent', '#0078d4')}; font-size: 14px; font-weight: bold;") 
         layout.addWidget(self.lbl_status)
 
@@ -237,7 +244,7 @@ class DownloadWorker(QThread):
     def run(self):
         try:
             temp_dir = tempfile.gettempdir()
-            target_path = os.path.join(temp_dir, f"WingetInstaller_Update_{random.randint(1000,9999)}.exe")
+            target_path = os.path.join(temp_dir, f"OmniDesk_Update_{random.randint(1000,9999)}.exe")
 
             if os.path.exists(target_path):
                 try: os.remove(target_path)
@@ -325,11 +332,10 @@ class AppUpdater(QObject):
             self.on_continue()
 
     def prompt_update(self, ver, url, size):
-        # Dialog s novým čistým designem
         dlg = ModernMessageDialog(
             self.parent, 
             "Nová aktualizace", 
-            f"Je k dispozici nová verze {ver}.<br>Přejete si ji nainstalovat?",
+            f"Je k dispozici nová verze OmniDesk {ver}.<br>Přejete si ji nainstalovat?",
             btn_text="Aktualizovat",
             show_cancel=True
         )
@@ -340,6 +346,7 @@ class AppUpdater(QObject):
             if dl.result() == QDialog.DialogCode.Rejected and self.on_continue:
                 self.on_continue()
         elif self.on_continue:
+            # Uživatel kliknul na Zrušit, zavolá se callback (Zobrazení hlavního okna)
             self.on_continue()
 
     def perform_restart_6_3_logic(self, downloaded_file_path):

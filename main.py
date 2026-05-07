@@ -284,9 +284,13 @@ class InitWorker(QThread):
 
 def start_program():
     global window, final_specs
+    # Pouze vytvoříme okno do paměti, ALE NEZOBRAZÍME HO (chybí window.show())
     window = MainWindow(specs=final_specs)
-    window.show()
-    QTimer.singleShot(1000, lambda: window.updater.check_for_updates(silent=True))
+    
+    # Spustíme kontrolu aktualizací tiše na pozadí.
+    # Pokud update NENÍ, nebo uživatel klikne na "Zrušit", 
+    # spustí se callback "on_continue", který teprve teď okno zobrazí.
+    window.updater.check_for_updates(silent=True, on_continue=window.show)
 
 if __name__ == "__main__":
     if os.name == 'nt': 
