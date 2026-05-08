@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QProgressBar, QFrame, QLineEdit, QFileIconProvider,
                              QTextEdit, QSizePolicy)
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QFileInfo, QTimer, QPropertyAnimation, QEasingCurve, QAbstractAnimation
-from PyQt6.QtGui import QIcon, QTextCursor, QColor, QPixmap, QImage, QPainter
+from PyQt6.QtGui import QIcon, QTextCursor, QColor, QPixmap, QImage, QPainter, QPainterPath
 from core.config import COLORS, resource_path
 
 # Fallback pro HoverButton
@@ -21,6 +21,57 @@ except ImportError:
         def __init__(self, t, i, s, p=None):
             super().__init__(t, p)
             self.setIcon(QIcon(resource_path(i)))
+
+# --- MINIMALISTICKÉ TLAČÍTKO AKTUALIZACE ---
+class UpdateIconButton(QPushButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(32, 32)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Aktualizovat")
+        
+        # Zkusíme použít tvůj navrhovaný box-arrow-down-thin.png, pokud není, fallback na download-simple-thin.png
+        self.icon_path = resource_path("assets/images/box-arrow-down-thin.png")
+        if not os.path.exists(self.icon_path):
+            self.icon_path = resource_path("assets/images/download-simple-thin.png")
+            
+        self._hover = False
+        self.setStyleSheet("background: transparent; border: none;")
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        if self._hover:
+            p.setBrush(QColor(COLORS['item_hover']))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawEllipse(self.rect())
+            
+        if os.path.exists(self.icon_path):
+            pix = QPixmap(self.icon_path).scaled(18, 18, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            colored_pix = QPixmap(pix.size())
+            colored_pix.fill(Qt.GlobalColor.transparent)
+            
+            cp = QPainter(colored_pix)
+            cp.drawPixmap(0, 0, pix)
+            cp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            # Ikona je šedá (sub_text), po najetí zmodrá (accent)
+            color = QColor(COLORS['accent']) if self._hover else QColor(COLORS['sub_text'])
+            cp.fillRect(colored_pix.rect(), color)
+            cp.end()
+            
+            x = (self.width() - 18) // 2
+            y = (self.height() - 18) // 2
+            p.drawPixmap(x, y, colored_pix)
+
+    def enterEvent(self, event):
+        self._hover = True
+        self.update()
+
+    def leaveEvent(self, event):
+        self._hover = False
+        self.update()
+
 
 # --- WORKER PRO STAHOVÁNÍ IKON ---
 class IconDownloadWorker(QThread):
@@ -133,7 +184,7 @@ def find_main_exe_in_folder(folder):
     except: pass
     return best_exe
 
-# --- 1. SCAN WORKER (OPRAVENÝ PARSING PRO <) ---
+# --- 1. SCAN WORKER ---
 class ScanWorker(QThread):
     finished = pyqtSignal(list)
     error = pyqtSignal(str)
@@ -154,48 +205,33 @@ class ScanWorker(QThread):
                 clean_line = line.strip()
                 if not clean_line: continue
                 
-                # Detekce hlavičky
                 if "Name" in line and "Id" in line and "Version" in line: 
                     parsing = True
                     continue
                 if not parsing or "----" in line: 
                     continue
                 
-                # Filtrace informačních řádků
                 if "have an upgrade available" in clean_line or "upgrades available" in clean_line:
                     continue
 
-                # --- PARSOVÁNÍ (ODZADU) ---
                 parts = clean_line.split()
-                
-                # Očekáváme minimálně: Název, ID, StaráVerze, NováVerze, Source (5 dílů, ale název může být rozdělený)
-                # Winget výstup:
-                # [Název......] [ID] [Stará] [Nová] [Source]
                 
                 if len(parts) >= 4:
                     source = parts[-1]
                     new_ver = parts[-2]
                     
-                    # Logika pro detekci zobáčku <
-                    # Normální stav: parts[-3] je verze, parts[-4] je ID
-                    # Ubisoft stav: parts[-3] je verze, parts[-4] je <, parts[-5] je ID
-                    
                     if parts[-4] == '<':
-                        # Případ Ubisoft: verze je rozdělená na "<" a "číslo"
-                        curr_ver = f"{parts[-4]} {parts[-3]}" # Spojíme zpět do "< 169.x"
+                        curr_ver = f"{parts[-4]} {parts[-3]}"
                         app_id = parts[-5]
                         name_parts = parts[:-5]
                     else:
-                        # Normální stav
                         curr_ver = parts[-3]
                         app_id = parts[-4]
                         name_parts = parts[:-4]
 
                     name = " ".join(name_parts)
                     
-                    # Fix, pokud by winget chyběl nebo byl posunutý (fallback)
                     if new_ver.lower() == "winget":
-                         # Toto se stane jen kdyby winget výstup úplně zblbnul
                          pass
 
                     updates.append({'name': name, 'id': app_id, 'current': curr_ver, 'new': new_ver})
@@ -266,8 +302,9 @@ class UpdateRowWidget(QWidget):
         self.parent_page = parent_page
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setContentsMargins(5, 5, 20, 5) # Zvětšený pravý okraj pro lepší zarovnání ikony
         layout.setSpacing(15)
+        layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         self.icon_lbl = QLabel()
         self.icon_lbl.setFixedSize(24, 24)
@@ -298,23 +335,8 @@ class UpdateRowWidget(QWidget):
         new_lbl.setStyleSheet(f"color: {COLORS['accent']}; font-weight: bold; background: transparent;")
         layout.addWidget(new_lbl)
 
-        self.btn_up = QPushButton("Aktualizovat")
-        self.btn_up.setFixedWidth(100)
-        self.btn_up.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_up.setStyleSheet(f"""
-            QPushButton {{ 
-                background: transparent; 
-                color: {COLORS['accent']}; 
-                font-weight: bold; 
-                border: 1px solid {COLORS['accent']}; 
-                border-radius: 4px; 
-                padding: 4px; 
-            }} 
-            QPushButton:hover {{ 
-                background: {COLORS['accent']}; 
-                color: white; 
-            }}
-        """)
+        # Použití nového minimalistického tlačítka
+        self.btn_up = UpdateIconButton()
         self.btn_up.clicked.connect(lambda: self.parent_page.run_update(data['id'], data['name']))
         layout.addWidget(self.btn_up)
 
@@ -437,7 +459,9 @@ class UpdaterPage(QWidget):
         # D. HLAVIČKA
         head = QWidget(); head.setStyleSheet(f"background: {COLORS['bg_sidebar']}; border-bottom: 1px solid {COLORS['border']};")
         hl = QHBoxLayout(head); hl.setContentsMargins(35, 8, 35, 8); hl.setSpacing(15)
-        for t, w, s in [("", 24, 0), ("NÁZEV APLIKACE", 0, 1), ("STÁVAJÍCÍ", 140, 0), ("NOVÁ", 140, 0), ("AKCE", 100, 0)]:
+        
+        # Změněno odsazení hlaviček - sloupec AKCE odstraněn text a zmenšen tak, aby seděl nad ikony
+        for t, w, s in [("", 24, 0), ("NÁZEV APLIKACE", 0, 1), ("STÁVAJÍCÍ", 140, 0), ("NOVÁ", 140, 0), ("", 32, 0)]:
             lbl = QLabel(t); lbl.setStyleSheet(f"font-weight: bold; color: white; font-size: 9pt; border: none;")
             if w > 0: lbl.setFixedWidth(w)
             hl.addWidget(lbl, stretch=s)
@@ -445,7 +469,16 @@ class UpdaterPage(QWidget):
 
         # E. SEZNAM
         self.list_widget = QListWidget()
-        self.list_widget.setStyleSheet(f"QListWidget {{ background: {COLORS['bg_main']}; border: none; outline: none; padding: 0 30px; }} QListWidget::item {{ border-bottom: 1px solid {COLORS['border']}; padding: 0px; }} QListWidget::item:hover {{ background: {COLORS['item_hover']}; }} QScrollBar:vertical {{ border: none; background: {COLORS['bg_main']}; width: 8px; margin: 0px; }} QScrollBar::handle:vertical {{ background: #444; min-height: 20px; border-radius: 4px; }} QScrollBar::handle:vertical:hover {{ background: {COLORS['accent']}; }} QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: none; }} QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}")
+        self.list_widget.setStyleSheet(f"""
+            QListWidget {{ background: {COLORS['bg_main']}; border: none; outline: none; padding: 0 30px; }} 
+            QListWidget::item {{ border-bottom: 1px solid {COLORS['border']}; padding: 0px; }} 
+            QListWidget::item:hover {{ background: {COLORS['item_hover']}; }} 
+            QScrollBar:vertical {{ border: none; background-color: transparent; width: 8px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background-color: {COLORS.get('accent', '#0078d4')}; min-height: 30px; border-radius: 4px; }}
+            QScrollBar::handle:vertical:hover {{ background-color: {COLORS.get('accent_hover', '#1f8ad2')}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: none; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+        """)
         self.list_widget.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
         main_layout.addWidget(self.list_widget)
 
@@ -455,20 +488,34 @@ class UpdaterPage(QWidget):
         ccl = QVBoxLayout(self.console_container); ccl.setContentsMargins(15, 8, 15, 8); ccl.setSpacing(5)
         hl = QHBoxLayout(); self.con_title = QLabel("PRŮBĚH INSTALACE")
         self.con_title.setStyleSheet(f"color: white; font-weight: bold; font-size: 11px; letter-spacing: 0.5px; background: transparent;")
+        
         self.btn_cancel = QPushButton("Zrušit"); self.btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_cancel.clicked.connect(self.cancel_current_process)
         self.btn_cancel.setStyleSheet("QPushButton { background: #333; color: #ff5555; border: 1px solid #ff5555; border-radius: 4px; padding: 2px 10px; font-size: 10px; font-weight: bold; } QPushButton:hover { background: #ff5555; color: white; }")
+        
         btn_close = QPushButton("✕"); btn_close.setFixedSize(20, 20); btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_close.setStyleSheet("QPushButton { background: transparent; color: #777; border: none; font-weight: bold; font-size: 12px; } QPushButton:hover { color: white; }")
         btn_close.clicked.connect(self.hide_console)
+        
         hl.addWidget(self.con_title); hl.addStretch(); hl.addWidget(self.btn_cancel); hl.addSpacing(10); hl.addWidget(btn_close)
         ccl.addLayout(hl)
+        
         self.console_out = QTextEdit(); self.console_out.setReadOnly(True)
-        self.console_out.setStyleSheet(f"QTextEdit {{ background: transparent; color: #ccc; border: none; font-family: 'Consolas', 'Courier New', monospace; font-size: 11px; }} QScrollBar:vertical {{ border: none; background: transparent; width: 6px; margin: 0; }} QScrollBar::handle:vertical {{ background: #555; min-height: 20px; border-radius: 4px; }} QScrollBar::handle:vertical:hover {{ background: {COLORS['accent']}; }} QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: none; }} QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}")
+        self.console_out.setStyleSheet(f"""
+            QTextEdit {{ background: transparent; color: #ccc; border: none; font-family: 'Consolas', 'Courier New', monospace; font-size: 11px; }} 
+            QScrollBar:vertical {{ border: none; background-color: transparent; width: 8px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background-color: {COLORS.get('accent', '#0078d4')}; min-height: 30px; border-radius: 4px; }}
+            QScrollBar::handle:vertical:hover {{ background-color: {COLORS.get('accent_hover', '#1f8ad2')}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: none; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+        """)
         ccl.addWidget(self.console_out)
+        
+        # ZPĚT PŘIDANÝ PROGRESS BAR
         self.con_progress = QProgressBar(); self.con_progress.setFixedHeight(3); self.con_progress.setTextVisible(False)
         self.con_progress.setStyleSheet(f"QProgressBar {{ border: none; background: #222; border-radius: 1px; }} QProgressBar::chunk {{ background-color: {COLORS['accent']}; border-radius: 1px; }}")
         self.con_progress.setRange(0, 0); ccl.addWidget(self.con_progress)
+        
         main_layout.addWidget(self.console_container)
         self.anim = QPropertyAnimation(self.console_container, b"maximumHeight"); self.anim.setDuration(400); self.anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 

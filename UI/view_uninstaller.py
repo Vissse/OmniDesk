@@ -207,10 +207,11 @@ class UninstallerPage(QWidget):
             QListWidget::item:hover {{ 
                 background-color: {COLORS['item_hover']}; 
             }}
-            QScrollBar:vertical {{ border: none; background: {COLORS['bg_main']}; width: 8px; margin: 0px; }}
-            QScrollBar::handle:vertical {{ background: #444; min-height: 20px; border-radius: 4px; }}
-            QScrollBar::handle:vertical:hover {{ background: {COLORS['accent']}; }}
+            QScrollBar:vertical {{ border: none; background-color: transparent; width: 8px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background-color: {COLORS.get('accent', '#0078d4')}; min-height: 30px; border-radius: 4px; }}
+            QScrollBar::handle:vertical:hover {{ background-color: {COLORS.get('accent_hover', '#1f8ad2')}; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: none; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
         """)
         main_layout.addWidget(self.list_widget)
 

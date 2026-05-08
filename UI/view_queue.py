@@ -226,7 +226,16 @@ class QueuePage(QWidget):
         main_layout.addWidget(header_widget)
 
         self.list_widget = QListWidget()
-        self.list_widget.setStyleSheet(f"QListWidget {{ background-color: {COLORS['bg_main']}; border: none; outline: none; padding: 0 30px; }} QListWidget::item {{ border-bottom: 1px solid {COLORS['border']}; padding: 0px; }} QListWidget::item:hover {{ background-color: {COLORS['item_hover']}; }}")
+        self.list_widget.setStyleSheet(f"""
+            QListWidget {{ background-color: {COLORS['bg_main']}; border: none; outline: none; padding: 0 30px; }} 
+            QListWidget::item {{ border-bottom: 1px solid {COLORS['border']}; padding: 0px; }} 
+            QListWidget::item:hover {{ background-color: {COLORS['item_hover']}; }}
+            QScrollBar:vertical {{ border: none; background-color: transparent; width: 8px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background-color: {COLORS.get('accent', '#0078d4')}; min-height: 30px; border-radius: 4px; }}
+            QScrollBar::handle:vertical:hover {{ background-color: {COLORS.get('accent_hover', '#1f8ad2')}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: none; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+        """)
         self.list_widget.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
         main_layout.addWidget(self.list_widget)
 
