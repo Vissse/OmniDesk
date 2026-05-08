@@ -63,6 +63,9 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
+# --- DEFINICE CESTY K IKONÁM ---
+ICONS_DIR = resource_path(os.path.join("assets", "icons"))
+
 # Pokud existuje nastavení, pokusíme se načíst uložené téma
 try:
     if os.path.exists(SETTINGS_FILE):

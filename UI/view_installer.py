@@ -1,12 +1,10 @@
 import os
-import requests
-from urllib.parse import urlparse
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QLineEdit, QCheckBox, QFrame,
                              QDialog, QTabWidget, QComboBox, QFileDialog, QDialogButtonBox,
                              QScrollArea, QGridLayout, QMessageBox)
-from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QPropertyAnimation, pyqtProperty, QEasingCurve, QRunnable, QThreadPool, QObject
-from PyQt6.QtGui import QIcon, QPixmap, QImage, QPainter, QColor, QPainterPath
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
 
 from core.config import COLORS
 from core.config import resource_path
@@ -21,61 +19,13 @@ CATEGORY_ICONS = {
     "🌐 Prohlížeče": "assets/images/globe-thin.png",
     "💬 Komunikace": "assets/images/chats-circle-thin.png",
     "🎮 Hry": "assets/images/game-controller-thin.png",
-    "🎨 Grafika": "assets/images/image-thin.png",
-    "🎬 Video": "assets/images/video-thin.png",
-    "🎵 Audio": "assets/images/waveform-thin.png",
-    "📄 Kancelář": "assets/images/file-text-thin.png",
-    "📄 PDF": "assets/images/file-pdf-thin.png",
-    "🛠️ Systémové nástroje": "assets/images/windows-logo-thin.png",
+    "🟩 Nvidia Nástroje": "assets/images/graphics-card-thin.png",
+    "🎨 Média (Obraz, Zvuk, Video)": "assets/images/images-thin.png",
+    "📄 Kancelářské aplikace": "assets/images/file-text-thin.png",
+    "💽 Správa disků": "assets/images/disc-thin.png",
+    "🛠️ Systémové nástroje (Utilities)": "assets/images/windows-logo-thin.png",
     "💻 Vývojářské nástroje": "assets/images/code-thin.png"
 }
-
-class ToggleSwitch(QCheckBox):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFixedSize(44, 24)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._position = 3.0  
-        
-        self.animation = QPropertyAnimation(self, b"position")
-        self.animation.setDuration(200) 
-        self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad) 
-        self.stateChanged.connect(self.setup_animation)
-
-    @pyqtProperty(float)
-    def position(self):
-        return self._position
-
-    @position.setter
-    def position(self, pos):
-        self._position = pos
-        self.update()
-
-    def setup_animation(self, value):
-        self.animation.stop()
-        if self.isChecked():
-            self.animation.setEndValue(23.0) 
-        else:
-            self.animation.setEndValue(3.0)  
-        self.animation.start()
-
-    def hitButton(self, pos):
-        return self.contentsRect().contains(pos)
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        bg_color = QColor(COLORS['accent']) if self.isChecked() else QColor("#666666")
-        
-        path = QPainterPath()
-        path.addRoundedRect(0, 0, self.width(), self.height(), 12, 12)
-        p.fillPath(path, bg_color)
-
-        knob_color = QColor("#ffffff")
-        p.setBrush(knob_color)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.drawEllipse(int(self._position), 3, 18, 18) 
-        p.end()
 
 class HoverButton(QPushButton):
     def __init__(self, text, icon_path, style_template, parent=None):
@@ -110,117 +60,6 @@ class HoverButton(QPushButton):
         self.set_colored_icon(False)
         super().leaveEvent(event)
 
-
-# --- POMOCNÉ TŘÍDY (WORKERS) ---
-
-# Pro zpětnou kompatibilitu s QueuePage
-class IconWorker(QThread):
-    loaded = pyqtSignal(QImage) # OPRAVA: Odesíláme QImage místo QPixmap
-    def __init__(self, app_id, website=None, preset_url=None):
-        super().__init__()
-        self.app_id = app_id; self.website = website; self.preset_url = preset_url
-
-    def get_domain(self, url):
-        try:
-            if not url.startswith("http"): url = "https://" + url
-            return urlparse(url).netloc
-        except: return ""
-
-    def run(self):
-        if self.app_id:
-            local_paths = [os.path.join("icons", f"{self.app_id}.png"), os.path.join("icons", f"{self.app_id.lower()}.png")]
-            for path in local_paths:
-                if os.path.exists(path):
-                    image = QImage(path)
-                    if not image.isNull():
-                        self.loaded.emit(image); return
-
-        if self.preset_url:
-            if self._try_load_url(self.preset_url): return
-
-        if self.app_id:
-            clean_id = self.app_id; lower_id = self.app_id.lower(); dashed_id = lower_id.replace(".", "-")
-            base_dash = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png"
-            if self._try_load_url(f"{base_dash}/{dashed_id}.png"): return
-            if self._try_load_url(f"{base_dash}/{lower_id}.png"): return
-            base_uniget = "https://raw.githubusercontent.com/marticliment/UnigetUI/main/src/UnigetUI.PackageEngine/Assets/Packages"
-            if self._try_load_url(f"{base_uniget}/{clean_id}.png"): return
-            if self._try_load_url(f"{base_uniget}/{lower_id}.png"): return
-
-        if self.website:
-            domain = self.get_domain(self.website)
-            if domain:
-                if self._try_load_url(f"https://icons.duckduckgo.com/ip3/{domain}.ico"): return
-                if self._try_load_url(f"https://www.google.com/s2/favicons?domain={domain}&sz=64"): return
-
-    def _try_load_url(self, url):
-        try:
-            session = requests.Session(); session.headers.update({'User-Agent': 'Mozilla/5.0'})
-            response = session.get(url, timeout=1.5, stream=True)
-            if response.status_code == 200:
-                data = response.content
-                if len(data) > 50:
-                    image = QImage(); image.loadFromData(data)
-                    if not image.isNull():
-                        self.loaded.emit(image); return True
-        except Exception: pass
-        return False
-
-# Bezpečný Task pro QThreadPool
-class IconTaskSignals(QObject):
-    loaded = pyqtSignal(QImage) # OPRAVA: Odesíláme QImage
-
-class IconWorkerTask(QRunnable):
-    def __init__(self, app_id, website=None, preset_url=None):
-        super().__init__()
-        self.app_id = app_id; self.website = website; self.preset_url = preset_url
-        self.signals = IconTaskSignals()
-
-    def get_domain(self, url):
-        try:
-            if not url.startswith("http"): url = "https://" + url
-            return urlparse(url).netloc
-        except: return ""
-
-    def run(self):
-        if self.app_id:
-            local_paths = [os.path.join("icons", f"{self.app_id}.png"), os.path.join("icons", f"{self.app_id.lower()}.png")]
-            for path in local_paths:
-                if os.path.exists(path):
-                    image = QImage(path)
-                    if not image.isNull():
-                        self.signals.loaded.emit(image); return
-
-        if self.preset_url:
-            if self._try_load_url(self.preset_url): return
-
-        if self.app_id:
-            clean_id = self.app_id; lower_id = self.app_id.lower(); dashed_id = lower_id.replace(".", "-")
-            base_dash = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png"
-            if self._try_load_url(f"{base_dash}/{dashed_id}.png"): return
-            if self._try_load_url(f"{base_dash}/{lower_id}.png"): return
-            base_uniget = "https://raw.githubusercontent.com/marticliment/UnigetUI/main/src/UnigetUI.PackageEngine/Assets/Packages"
-            if self._try_load_url(f"{base_uniget}/{clean_id}.png"): return
-            if self._try_load_url(f"{base_uniget}/{lower_id}.png"): return
-
-        if self.website:
-            domain = self.get_domain(self.website)
-            if domain:
-                if self._try_load_url(f"https://icons.duckduckgo.com/ip3/{domain}.ico"): return
-                if self._try_load_url(f"https://www.google.com/s2/favicons?domain={domain}&sz=64"): return
-
-    def _try_load_url(self, url):
-        try:
-            session = requests.Session(); session.headers.update({'User-Agent': 'Mozilla/5.0'})
-            response = session.get(url, timeout=1.5, stream=True)
-            if response.status_code == 200:
-                data = response.content
-                if len(data) > 50:
-                    image = QImage(); image.loadFromData(data)
-                    if not image.isNull():
-                        self.signals.loaded.emit(image); return True
-        except Exception: pass
-        return False
 
 # --- DIALOG NASTAVENÍ ---
 class InstallationOptionsDialog(QDialog):
@@ -293,62 +132,102 @@ class InstallationOptionsDialog(QDialog):
     def get_options(self):
         return { "admin": self.chk_admin.isChecked(), "interactive": self.chk_interactive.isChecked(), "hash": self.chk_hash.isChecked(), "version": self.combo_version.currentText(), "arch": self.combo_arch.currentText(), "scope": self.combo_scope.currentText(), "path": self.path_edit.text() }
 
-# --- KOMPAKTNÍ WIDGET PRO KATALOG ---
+
+# --- WIDGET PRO KATALOG ---
 class CompactAppWidget(QWidget):
     def __init__(self, data, parent_controller):
         super().__init__()
         self.data = data
         self.controller = parent_controller
-        self.setFixedHeight(38) 
-        self.setStyleSheet("background-color: transparent;")
+        self.setFixedHeight(48)
+        
+        self.setStyleSheet(f"""
+            QWidget#AppContainer {{
+                background-color: transparent;
+                border-radius: 8px;
+            }}
+            QWidget#AppContainer:hover {{
+                background-color: {COLORS.get('item_hover', '#2d2d30')};
+            }}
+        """)
+        self.setObjectName("AppContainer")
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(5, 5, 10, 5); layout.setSpacing(10)
-        
-        self.chk = ToggleSwitch()
-        if self.data['id'] in self.controller.queue_page.queue_data:
-            self.chk.setChecked(True)
-            self.chk.position = 23.0
-            
-        self.chk.stateChanged.connect(self.toggle_queue)
-        layout.addWidget(self.chk)
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setSpacing(15)
         
         self.icon_lbl = QLabel()
-        self.icon_lbl.setFixedSize(24, 24)
+        self.icon_lbl.setFixedSize(28, 28)
+        icon_path = data.get('icon_url')
         
-        local_icon_path = os.path.join("icons", f"{data['id']}.png")
-        if os.path.exists(local_icon_path):
-            pix = QPixmap(local_icon_path).scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        if icon_path and os.path.exists(icon_path):
+            pix = QPixmap(icon_path).scaled(28, 28, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.icon_lbl.setPixmap(pix)
         else:
             self.icon_lbl.setText("📦")
-            self.icon_lbl.setStyleSheet("color: #888; font-size: 14px;")
-            
-            # Bezpečné vytvoření a start workeru ve fondu vláken
-            self.icon_task = IconWorkerTask(data.get('id'), data.get('website'), data.get('icon_url'))
-            self.icon_task.signals.loaded.connect(self.set_icon)
-            QThreadPool.globalInstance().start(self.icon_task)
+            self.icon_lbl.setStyleSheet("color: #888; font-size: 16px; background: transparent;")
             
         layout.addWidget(self.icon_lbl)
-        name_lbl = QLabel(data['name']); name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: white;")
+        
+        name_lbl = QLabel(data['name'])
+        name_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: white; background: transparent;")
         layout.addWidget(name_lbl, stretch=1)
+        
+        self.btn_pick = QPushButton()
+        self.btn_pick.setFixedSize(85, 28)
+        self.btn_pick.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_pick.clicked.connect(self.toggle_queue)
+        layout.addWidget(self.btn_pick)
 
-    def set_icon(self, image):
-        # OPRAVA: Převedeme bezpečný QImage na QPixmap až tady, v hlavním grafickém vlákně
-        pixmap = QPixmap.fromImage(image)
-        scaled = pixmap.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-        self.icon_lbl.setPixmap(scaled)
-        self.icon_lbl.setText("")
+        self.is_queued = self.data['id'] in self.controller.queue_page.queue_data
+        self.update_button_style()
 
-    def toggle_queue(self, state):
-        if state == 2: self.controller.queue_page.add_to_queue(self.data, icon=self.icon_lbl.pixmap())
-        else: self.controller.queue_page.remove_item_by_id(self.data['id'])
+    def update_button_style(self):
+        if self.is_queued:
+            self.btn_pick.setText("Zrušit")
+            self.btn_pick.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: {COLORS.get('accent', '#0078d4')};
+                    border: 1px solid {COLORS.get('accent', '#0078d4')};
+                    border-radius: 14px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: {COLORS.get('accent', '#0078d4')};
+                    color: white;
+                }}
+            """)
+        else:
+            self.btn_pick.setText("Přidat")
+            self.btn_pick.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {COLORS.get('item_bg', '#3e3e42')};
+                    color: white;
+                    border: none;
+                    border-radius: 14px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: {COLORS.get('accent', '#0078d4')};
+                }}
+            """)
+
+    def toggle_queue(self):
+        self.is_queued = not self.is_queued
+        self.update_button_style()
+        
+        if self.is_queued:
+            self.controller.queue_page.add_to_queue(self.data, icon=self.icon_lbl.pixmap())
+        else:
+            self.controller.queue_page.remove_item_by_id(self.data['id'])
             
     def set_checked_state(self, is_checked):
-        self.chk.blockSignals(True)
-        self.chk.setChecked(is_checked)
-        self.chk.position = 23.0 if is_checked else 3.0
-        self.chk.blockSignals(False)
+        if self.is_queued != is_checked:
+            self.is_queued = is_checked
+            self.update_button_style()
 
 # --- HLAVNÍ UI (InstallerPage) ---
 class InstallerPage(QWidget):
@@ -438,9 +317,11 @@ class InstallerPage(QWidget):
         catalog_scroll.setWidgetResizable(True)
         catalog_scroll.setStyleSheet(f"""
             QScrollArea {{ border: none; background-color: transparent; }}
-            QScrollBar:vertical {{ border: none; background-color: {COLORS['bg_main']}; width: 8px; border-radius: 4px; }}
-            QScrollBar::handle:vertical {{ background-color: #444; border-radius: 4px; min-height: 20px; }}
-            QScrollBar::handle:vertical:hover {{ background-color: {COLORS['accent']}; }}
+            QScrollBar:vertical {{ border: none; background-color: transparent; width: 8px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background-color: {COLORS.get('accent', '#0078d4')}; min-height: 30px; border-radius: 4px; }}
+            QScrollBar::handle:vertical:hover {{ background-color: {COLORS.get('accent_hover', '#1f8ad2')}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: none; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
         """)
         
         catalog_content = QWidget()
@@ -453,6 +334,8 @@ class InstallerPage(QWidget):
 
         if APP_CATEGORIES:
             for cat_name, app_list in APP_CATEGORIES.items():
+                sorted_apps = sorted(app_list, key=lambda x: x['name'].lower())
+                
                 header_container = QWidget(); header_layout = QHBoxLayout(header_container)
                 header_layout.setContentsMargins(0, 25, 0, 5); header_layout.setSpacing(10)
                 
@@ -475,21 +358,44 @@ class InstallerPage(QWidget):
                 separator.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
                 c_layout.addWidget(separator)
                 
-                grid = QGridLayout(); grid.setContentsMargins(0, 15, 0, 0); grid.setSpacing(10)
+                grid = QGridLayout()
+                grid.setContentsMargins(0, 15, 0, 0)
+                grid.setHorizontalSpacing(30)
+                grid.setVerticalSpacing(5)
+                grid.setColumnStretch(0, 1)
+                grid.setColumnStretch(1, 1)
                 
                 cat_widgets = []
-                col = 0; row = 0
-                for app in app_list:
+                cat_dummies = [] 
+                
+                num_apps = len(sorted_apps)
+                num_rows = (num_apps + 1) // 2 
+                
+                for idx, app in enumerate(sorted_apps):
                     w = CompactAppWidget(app, self)
                     self.catalog_widgets.append(w)
                     cat_widgets.append(w)
+                    
+                    col = idx // num_rows
+                    row = idx % num_rows
                     grid.addWidget(w, row, col)
-                    col += 1
-                    if col > 1:
-                        col = 0; row += 1
+                
+                total_cells = num_rows * 2
+                for empty_idx in range(num_apps, total_cells):
+                    col = empty_idx // num_rows
+                    row = empty_idx % num_rows
+                    dummy = QWidget() 
+                    grid.addWidget(dummy, row, col)
+                    cat_dummies.append(dummy) 
                         
                 c_layout.addLayout(grid)
-                self.categories_ui.append({'header': header_container, 'separator': separator, 'widgets': cat_widgets})
+                self.categories_ui.append({
+                    'header': header_container, 
+                    'separator': separator, 
+                    'widgets': cat_widgets,
+                    'grid': grid,             
+                    'dummies': cat_dummies    
+                })
         else:
             lbl = QLabel("Pro zobrazení katalogu nastavte APP_CATEGORIES v presets.py")
             lbl.setStyleSheet("color: #888;")
@@ -505,15 +411,50 @@ class InstallerPage(QWidget):
     def filter_catalog(self):
         query = self.search_input.text().strip().lower()
         for cat in self.categories_ui:
-            visible_count = 0
+            grid = cat['grid']
+            
+            # Zjištění, které aplikace mají být po vyhledání vidět
+            visible_widgets = []
             for w in cat['widgets']:
                 if query in w.data['name'].lower() or query in w.data['id'].lower():
-                    w.show(); visible_count += 1
-                else: w.hide()
-            if visible_count == 0:
-                cat['header'].hide(); cat['separator'].hide()
+                    w.show()
+                    visible_widgets.append(w)
+                else:
+                    w.hide()
+            
+            # Skrytí všech aktuálních výplňových "dummy" widgetů, aby nám nedělaly neplechu
+            for d in cat['dummies']:
+                d.hide()
+                
+            num_apps = len(visible_widgets)
+            
+            # Pokud po vyfiltrování něco zbylo, přeskládáme to do mřížky odznova (reflow)
+            if num_apps > 0:
+                num_rows = (num_apps + 1) // 2 
+                
+                for idx, w in enumerate(visible_widgets):
+                    col = idx // num_rows
+                    row = idx % num_rows
+                    grid.addWidget(w, row, col)
+                
+                # Výpočet, zda nám chybí položka do páru (abychom neroztahovali poslední appku)
+                total_cells = num_rows * 2
+                dummy_needed = total_cells - num_apps
+                
+                if dummy_needed > 0:
+                    if not cat['dummies']:
+                        cat['dummies'].append(QWidget())
+                    d = cat['dummies'][0]
+                    d.show()
+                    grid.addWidget(d, num_rows - 1, 1)
+
+            # Skrytí celého nadpisu a čáry, pokud v kategorii nic nevyhovuje vyhledávání
+            if num_apps == 0:
+                cat['header'].hide()
+                cat['separator'].hide()
             else:
-                cat['header'].show(); cat['separator'].show()
+                cat['header'].show()
+                cat['separator'].show()
 
     def refresh_catalog_checkboxes(self):
         for widget in self.catalog_widgets: widget.set_checked_state(widget.data['id'] in self.queue_page.queue_data)

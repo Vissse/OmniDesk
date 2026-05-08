@@ -1,237 +1,13 @@
 import webbrowser
-import subprocess
 import os
-import importlib
-import re
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QPushButton, QLineEdit, QComboBox, QFrame, QMessageBox, 
-                             QTextEdit, QDialog, QScrollArea, QCheckBox, QFileDialog)
-from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
+                             QPushButton, QComboBox, QFrame, QMessageBox, 
+                             QScrollArea, QCheckBox, QFileDialog)
+from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QMouseEvent, QCursor
 
 from core.config import COLORS, THEMES
 from core.settings_manager import SettingsManager
-
-# Pokus o import presets pro analýzu
-try:
-    import core.presets as presets
-except ImportError:
-    presets = None
-
-
-# --- WORKER PRO KONTROLU A OPRAVU PRESETS ---
-class PresetsCheckWorker(QThread):
-    log_signal = pyqtSignal(str)     # Průběžný log
-    finished = pyqtSignal(str)       # Finální report
-
-    def run(self):
-        if not presets:
-            self.finished.emit("Chyba: Modul presets nebyl nalezen.")
-            return
-
-        self.log_signal.emit("Načítám definice aplikací z paměti...")
-        
-        apps_to_check = []
-        seen_ids = set()
-
-        # Posbíráme všechny aplikace k ověření
-        for category_apps in presets.APP_CATEGORIES.values():
-            for app in category_apps:
-                if app["id"] not in seen_ids:
-                    apps_to_check.append(app) # ZDE UKLÁDÁME ODKAZ NA SLOVNÍK V PAMĚTI
-                    seen_ids.add(app["id"])
-
-        total = len(apps_to_check)
-        self.log_signal.emit(f"Nalezeno {total} unikátních aplikací ke kontrole.\n")
-
-        changes = []
-        errors = []
-
-        for i, app in enumerate(apps_to_check):
-            current_id = app["id"]
-            app_name = app["name"]
-            
-            self.log_signal.emit(f"[{i+1}/{total}] Kontrola: {app_name} ({current_id})...")
-
-            if not self.is_id_valid(current_id):
-                self.log_signal.emit(f"   ⚠️ ID '{current_id}' nefunguje. Hledám opravu...")
-                new_id = self.find_correct_id(app_name)
-                
-                if new_id and new_id != current_id:
-                    self.log_signal.emit(f"   ✅ Nalezeno nové ID: {new_id}")
-                    
-                    if self.update_overrides_file(current_id, new_id):
-                        # ZDE JE KOUZLO: Změníme ID rovnou v paměti. 
-                        # Promítne se to okamžitě do celé aplikace, není potřeba reload!
-                        app["id"] = new_id 
-                        changes.append(f"OPRAVENO: {app_name}\n   Staré: {current_id}\n   Nové:  {new_id}")
-                    else:
-                        errors.append(f"CHYBA ZÁPISU: {app_name}")
-                else:
-                    errors.append(f"NENALEZENO: {app_name}")
-                    self.log_signal.emit(f"   ❌ Nepodařilo se najít nové ID.")
-            else:
-                pass
-
-        report = "=== VÝSLEDEK KONTROLY ===\n\n"
-        if changes:
-            report += f"✅ Bylo opraveno a uloženo do Dokumentů {len(changes)} ID:\n" + "\n".join(changes) + "\n\n"
-        else:
-            report += "✅ Všechna ID jsou platná. Žádné změny nebyly nutné.\n\n"
-        
-        if errors:
-            report += f"⚠️ Problémy ({len(errors)}):\n" + "\n".join(errors)
-            
-        # Odstraněno importlib.reload(presets) - už není potřeba a naopak by to uškodilo
-        self.finished.emit(report)
-
-    def is_id_valid(self, app_id):
-        try:
-            cmd = f'winget show --id "{app_id}" --accept-source-agreements'
-            result = subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return result.returncode == 0
-        except:
-            return False
-
-    def find_correct_id(self, app_name):
-        try:
-            cmd = f'winget search --name "{app_name}" --source winget --accept-source-agreements -n 1'
-            result = subprocess.run(cmd, capture_output=True, text=True, shell=True, encoding='cp852', errors='replace')
-            lines = result.stdout.split('\n')
-            data_started = False
-            for line in lines:
-                if line.startswith("---"):
-                    data_started = True
-                    continue
-                if data_started and line.strip():
-                    ids = re.findall(r'\b[a-zA-Z0-9-]+\.[a-zA-Z0-9\.-]+\b', line)
-                    if ids:
-                        return ids[0]
-            return None
-        except:
-            return None
-
-    def update_overrides_file(self, old_id, new_id):
-        """Uloží mapování opraveného ID do JSONu v Dokumentech"""
-        try:
-            from core.presets import OVERRIDES_FILE
-            import json
-            import os
-            
-            overrides = {}
-            # Pokud JSON už existuje, načteme ho, abychom nepřemazali starší opravy
-            if os.path.exists(OVERRIDES_FILE):
-                try:
-                    with open(OVERRIDES_FILE, "r", encoding="utf-8") as f:
-                        overrides = json.load(f)
-                except:
-                    pass
-            
-            # Zapíšeme si pravidlo "Když narazíš na old_id, použij new_id"
-            overrides[old_id] = new_id
-            
-            # Uložíme aktualizovaný slovník
-            with open(OVERRIDES_FILE, "w", encoding="utf-8") as f:
-                json.dump(overrides, f, indent=4, ensure_ascii=False)
-                
-            return True
-        except Exception as e:
-            print(f"Chyba zápisu do overrides jsonu: {e}")
-            return False
-
-
-# --- DIALOG PRO VÝPIS LOGU ---
-class LogDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(600, 450)
-        
-        self.container = QWidget(self)
-        self.container.setObjectName("MainContainer")
-        self.container.setGeometry(0, 0, 600, 450)
-        self.container.setStyleSheet(f"""
-            #MainContainer {{
-                background-color: {COLORS['bg_main']};
-                border: 1px solid {COLORS['border']};
-                border-radius: 8px;
-            }}
-        """)
-        
-        main_layout = QVBoxLayout(self.container)
-        main_layout.setContentsMargins(1, 1, 1, 1)
-        main_layout.setSpacing(0)
-
-        # Horní lišta
-        title_bar = QWidget()
-        title_bar.setObjectName("TitleBar")
-        title_bar.setFixedHeight(40)
-        title_bar.setStyleSheet(f"""
-            #TitleBar {{
-                background-color: {COLORS['bg_sidebar']};
-                border: 1px solid {COLORS['border']}; 
-                border-top-left-radius: 7px; 
-                border-top-right-radius: 7px;
-                border-bottom-left-radius: 0px;
-                border-bottom-right-radius: 0px;
-            }}
-        """)
-        
-        title_layout = QHBoxLayout(title_bar)
-        title_layout.setContentsMargins(15, 0, 10, 0)
-
-        lbl_title = QLabel("🔍 Kontrola Presets")
-        lbl_title.setStyleSheet("color: white; font-weight: bold; border: none; font-size: 14px; background: transparent;")
-        title_layout.addWidget(lbl_title)
-        title_layout.addStretch()
-
-        btn_x = QPushButton("✕")
-        btn_x.setFixedSize(30, 30)
-        btn_x.clicked.connect(self.reject)
-        btn_x.setStyleSheet(f"background: transparent; color: #888; border: none; font-size: 16px; font-weight: bold;")
-        title_layout.addWidget(btn_x)
-        main_layout.addWidget(title_bar)
-
-        # Obsah
-        content_layout = QVBoxLayout()
-        content_layout.setContentsMargins(20, 20, 20, 20)
-        
-        self.log_area = QTextEdit()
-        self.log_area.setReadOnly(True)
-        self.log_area.setStyleSheet(f"background-color: {COLORS['input_bg']}; color: {COLORS['fg']}; border: 1px solid {COLORS['border']}; font-family: Consolas; border-radius: 4px;")
-        content_layout.addWidget(self.log_area)
-
-        self.btn_close = QPushButton("Zavřít")
-        self.btn_close.setEnabled(False)
-        self.btn_close.setFixedHeight(40)
-        self.btn_close.setStyleSheet(f"background-color: {COLORS['accent']}; color: white; border: none; border-radius: 4px; font-weight: bold;")
-        self.btn_close.clicked.connect(self.accept)
-        content_layout.addWidget(self.btn_close)
-
-        main_layout.addLayout(content_layout)
-        self.old_pos = None
-
-    def append_log(self, text):
-        self.log_area.append(text)
-        self.log_area.verticalScrollBar().setValue(self.log_area.verticalScrollBar().maximum())
-
-    def finish(self, report):
-        self.log_area.append("\n" + "-"*40 + "\n")
-        self.log_area.append(report)
-        self.btn_close.setEnabled(True)
-        self.btn_close.setText("Hotovo (Zavřít)")
-
-    # Drag okna
-    def mousePressEvent(self, event: QMouseEvent):
-        if event.button() == Qt.MouseButton.LeftButton: self.old_pos = event.globalPosition().toPoint()
-    def mouseMoveEvent(self, event: QMouseEvent):
-        if self.old_pos:
-            delta = event.globalPosition().toPoint() - self.old_pos
-            self.move(self.pos() + delta)
-            self.old_pos = event.globalPosition().toPoint()
-    def mouseReleaseEvent(self, event: QMouseEvent): self.old_pos = None
-
 
 # --- POMOCNÉ WIDGETY ---
 
@@ -298,20 +74,7 @@ class SettingsPage(QWidget):
         lbl_main.setStyleSheet("font-size: 28px; font-weight: bold; color: white; margin-bottom: 20px;")
         self.content_layout.addWidget(lbl_main)
 
-        # 1. SEKCE: PRESETS
-        self.content_layout.addWidget(SectionHeader("Databáze aplikací"))
-        btn_check_presets = QPushButton("Zkontrolovat správnost ID k instalaci aplikace")
-        self._style_link_btn(btn_check_presets)
-        btn_check_presets.clicked.connect(self.check_presets)
-        
-        self.content_layout.addWidget(SettingRow(
-            "Validace ID aplikací", 
-            "Ověří všechna ID v databázi a automaticky opraví neplatné.", 
-            btn_check_presets
-        ))
-        self.content_layout.addWidget(Separator())
-
-        # 2. SEKCE: VZHLED
+        # 1. SEKCE: VZHLED
         self.content_layout.addWidget(SectionHeader("Vzhled a Jazyk"))
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(list(THEMES.keys()))
@@ -344,7 +107,7 @@ class SettingsPage(QWidget):
         self.content_layout.addWidget(SettingRow("Jazyk aplikace", "Změna se projeví po restartu.", self.lang_combo))
         self.content_layout.addWidget(Separator())
 
-       # 3. SEKCE: SYSTÉM
+        # 2. SEKCE: SYSTÉM
         self.content_layout.addWidget(SectionHeader("Systém"))
         btn_update = QPushButton("Zkontrolovat aktualizace")
         self._style_link_btn(btn_update)
@@ -399,14 +162,6 @@ class SettingsPage(QWidget):
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
         """)
-
-    def check_presets(self):
-        self.log_dialog = LogDialog(self)
-        self.log_dialog.show()
-        self.presets_worker = PresetsCheckWorker()
-        self.presets_worker.log_signal.connect(self.log_dialog.append_log)
-        self.presets_worker.finished.connect(self.log_dialog.finish)
-        self.presets_worker.start()
 
     def save_theme(self, text):
         self.settings["theme"] = text

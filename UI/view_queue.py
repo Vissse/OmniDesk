@@ -3,12 +3,12 @@ import json
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QListWidget, QListWidgetItem, 
                              QMessageBox, QFileDialog, QFrame, QLineEdit, QCheckBox)
-from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter
 
 from core.config import COLORS
 from core.install_manager import InstallationDialog
-from UI.view_installer import HoverButton, InstallationOptionsDialog, IconWorker
+from UI.view_installer import HoverButton, InstallationOptionsDialog
 from core.config import resource_path
 
 # --- TABULKOVÝ ŘÁDEK FRONTY ---
@@ -46,21 +46,17 @@ class QueueTableWidget(QWidget):
         self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.icon_lbl)
 
+        # Nastavení ikony - čistě lokální přístup
         if cached_icon:
             self.set_icon(cached_icon)
         else:
-            default_icon_path = resource_path(os.path.join("images", "package-thin.png"))
-            if os.path.exists(default_icon_path):
-                pix = QPixmap(default_icon_path).scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            icon_path = data.get('icon_url')
+            if icon_path and os.path.exists(icon_path):
+                pix = QPixmap(icon_path).scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                 self.icon_lbl.setPixmap(pix)
             else:
                 self.icon_lbl.setText("📦") 
                 self.icon_lbl.setStyleSheet("font-size: 12pt; color: #888; border: none; background: transparent;")
-            
-            # Start icon worker as fallback
-            self.icon_worker = IconWorker(data.get('id'), data.get('website'), data.get('icon_url'))
-            self.icon_worker.loaded.connect(self.set_icon)
-            self.icon_worker.start()
 
         # Texty
         name_lbl = QLabel(data['name'])
