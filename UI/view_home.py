@@ -85,7 +85,7 @@ class HomePage(QWidget):
 
         funcs_layout.addWidget(FunctionRow(
             "package-thin.png", "Chytrá instalace", 
-            "Modul pro rychlé vyhledávání a instalaci aplikací. Využívá repozitář Winget a AI asistenci pro opravu názvů.",
+            "Modul pro rychlé vyhledávání a instalaci aplikací.",
             COLORS['accent']
         ))
         

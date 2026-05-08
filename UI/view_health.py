@@ -271,7 +271,7 @@ class HealthCheckPage(QWidget):
                 subprocess.Popen(command, shell=True)
             else:
                 cmd_with_resize = f'mode con: cols=100 lines=30 && color 0A && echo --- SPUSTENO: {desc} --- && {command}'
-                full_cmd = f'start "AI Winget - {desc}" cmd /k "{cmd_with_resize}"'
+                full_cmd = f'start "OmniDesk - {desc}" cmd /k "{cmd_with_resize}"'
                 subprocess.Popen(full_cmd, shell=True)
         except Exception as e:
             QMessageBox.critical(self, "Chyba spuštění", str(e))
