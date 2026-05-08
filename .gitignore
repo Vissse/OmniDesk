@@ -30,3 +30,4 @@ inno.iss
 *.code-workspace
 
 iconfix.py
+check_presets.py
