@@ -7,10 +7,10 @@ import random
 from pathlib import Path
 from packaging import version
 
-from PyQt6.QtCore import QObject, pyqtSignal, QThread, Qt, QTimer, QSize
+from PyQt6.QtCore import QObject, pyqtSignal, QThread, Qt
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QProgressBar, 
                              QPushButton, QWidget, QApplication, QHBoxLayout, QGraphicsDropShadowEffect, QMessageBox)
-from PyQt6.QtGui import QMouseEvent, QColor, QCursor, QIcon
+from PyQt6.QtGui import QMouseEvent, QColor, QIcon
 
 # Konfigurace
 try:

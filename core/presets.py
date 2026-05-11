@@ -18,7 +18,17 @@ def get_resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 ICONS_DIR = get_resource_path(os.path.join("assets", "icons"))
+DESCRIPTIONS_FILE = get_resource_path(os.path.join("assets", "descriptions.json"))
 DEFAULT_ICON = os.path.join(ICONS_DIR, "default-app.png")
+
+# --- Načtení popisů z JSONu ---
+APP_DESCRIPTIONS = {}
+if os.path.exists(DESCRIPTIONS_FILE):
+    try:
+        with open(DESCRIPTIONS_FILE, "r", encoding="utf-8") as f:
+            APP_DESCRIPTIONS = json.load(f)
+    except Exception as e:
+        print(f"DEBUG: Nelze načíst descriptions.json: {e}")
 
 def get_icon(filename):
     """Vrací cestu k lokální ikoně. Pokud neexistuje, vrací výchozí ikonu."""
@@ -27,206 +37,216 @@ def get_icon(filename):
         return local_path
     return DEFAULT_ICON if os.path.exists(DEFAULT_ICON) else None
 
+def create_app(name, app_id, website, icon_name):
+    """Pomocná funkce, která automaticky přiřadí description z JSONu dle ID"""
+    return {
+        "name": name,
+        "id": app_id,
+        "website": website,
+        "icon_url": get_icon(icon_name),
+        "description": APP_DESCRIPTIONS.get(app_id, "Popis nebyl nalezen v databázi.")
+    }
+
 # ==============================================================================
 # 1. DEFINICE JEDNOTLIVÝCH APLIKACÍ
 # ==============================================================================
 
 # --- Herní Launchery & Hry ---
-steam_app = {"name": "Steam", "id": "Valve.Steam", "website": "https://store.steampowered.com", "icon_url": get_icon("Valve.Steam.png")}
-epic_app = {"name": "Epic Games Launcher", "id": "EpicGames.EpicGamesLauncher", "website": "https://store.epicgames.com", "icon_url": get_icon("EpicGames.EpicGamesLauncher.png")}
-ubisoft_app = {"name": "Ubisoft Connect", "id": "Ubisoft.Connect", "website": "https://ubisoftconnect.com", "icon_url": get_icon("Ubisoft.Connect.png")}
-ea_app = {"name": "EA App", "id": "ElectronicArts.EADesktop", "website": "https://www.ea.com/ea-app", "icon_url": get_icon("ElectronicArts.EADesktop.png")}
-gog_app = {"name": "GOG GALAXY", "id": "GOG.Galaxy", "website": "https://www.gog.com/galaxy", "icon_url": get_icon("GOG.Galaxy.png")}
-playnite_app = {"name": "Playnite", "id": "Playnite.Playnite", "website": "https://playnite.link", "icon_url": get_icon("Playnite.Playnite.png")}
-battlenet_app = {"name": "Battle.net", "id": "Blizzard.BattleNet", "website": "https://www.blizzard.com", "icon_url": get_icon("Blizzard.BattleNet.png")}
-curseforge_app = {"name": "CurseForge", "id": "Overwolf.CurseForge", "website": "https://www.curseforge.com", "icon_url": get_icon("Overwolf.CurseForge.png")}
-riot_app = {"name": "Riot Client", "id": "RiotGames.LeagueOfLegends.EUNE", "website": "https://www.riotgames.com", "icon_url": get_icon("RiotGames.LeagueOfLegends.EUNE.png")}
-wargaming_app = {"name": "Wargaming.net", "id": "Wargaming.GameCenter", "website": "https://wargaming.net", "icon_url": get_icon("Wargaming.GameCenter.png")}
-modrinth_app = {"name": "Modrinth App", "id": "Modrinth.ModrinthApp", "website": "https://modrinth.com/app", "icon_url": get_icon("Modrinth.ModrinthApp.png")}
-psremote_app = {"name": "PS Remote Play", "id": "PlayStation.PSRemotePlay", "website": "https://remoteplay.dl.playstation.net/remoteplay/", "icon_url": get_icon("PlayStation.PSRemotePlay.png")}
-psaccessories_app = {"name": "PlayStation Accessories", "id": "PlayStation.PlayStationAccessories", "website": "https://controller.dl.playstation.net/controller/", "icon_url": get_icon("PlayStation.PlayStationAccessories.png")}
-bluestacks_app = {"name": "BlueStacks 5", "id": "BlueStack.BlueStacks", "website": "https://www.bluestacks.com/", "icon_url": get_icon("BlueStack.BlueStacks.png")}
-faceit_app = {"name": "FACEIT", "id": "FACEITLTD.FACEITClient", "website": "https://www.faceit.com/", "icon_url": get_icon("FACEITLTD.FACEITClient.png")}
-faceit_ac_app = {"name": "FACEIT Anti-Cheat", "id": "FACEITLTD.FACEITAC", "website": "https://www.faceit.com/en/anti-cheat", "icon_url": get_icon("FACEITLTD.FACEITClient.png")}
-ftb_app = {"name": "FTB Electron App", "id": "FTB.App", "website": "https://feed-the-beast.com/", "icon_url": get_icon("FeedTheBeast.FTBApp.png")}
-warthunder_app = {"name": "War Thunder", "id": "GaijinNetwork.WarThunder", "website": "https://warthunder.com/", "icon_url": get_icon("GaijinNetwork.WarThunder.png")}
-minecraft_app = {"name": "Minecraft Launcher", "id": "Mojang.MinecraftLauncher", "website": "https://www.minecraft.net/", "icon_url": get_icon("Mojang.MinecraftLauncher.png")}
-maniaplanet_app = {"name": "ManiaPlanet", "id": "Nadeo.ManiaPlanet", "website": "https://www.maniaplanet.com/", "icon_url": get_icon("Nadeo.ManiaPlanet.png")}
+steam_app = create_app("Steam", "Valve.Steam", "https://store.steampowered.com", "Valve.Steam.png")
+epic_app = create_app("Epic Games Launcher", "EpicGames.EpicGamesLauncher", "https://store.epicgames.com", "EpicGames.EpicGamesLauncher.png")
+ubisoft_app = create_app("Ubisoft Connect", "Ubisoft.Connect", "https://ubisoftconnect.com", "Ubisoft.Connect.png")
+ea_app = create_app("EA App", "ElectronicArts.EADesktop", "https://www.ea.com/ea-app", "ElectronicArts.EADesktop.png")
+gog_app = create_app("GOG GALAXY", "GOG.Galaxy", "https://www.gog.com/galaxy", "GOG.Galaxy.png")
+playnite_app = create_app("Playnite", "Playnite.Playnite", "https://playnite.link", "Playnite.Playnite.png")
+battlenet_app = create_app("Battle.net", "Blizzard.BattleNet", "https://www.blizzard.com", "Blizzard.BattleNet.png")
+curseforge_app = create_app("CurseForge", "Overwolf.CurseForge", "https://www.curseforge.com", "Overwolf.CurseForge.png")
+riot_app = create_app("Riot Client", "RiotGames.LeagueOfLegends.EUNE", "https://www.riotgames.com", "RiotGames.LeagueOfLegends.EUNE.png")
+wargaming_app = create_app("Wargaming.net", "Wargaming.GameCenter", "https://wargaming.net", "Wargaming.GameCenter.png")
+modrinth_app = create_app("Modrinth App", "Modrinth.ModrinthApp", "https://modrinth.com/app", "Modrinth.ModrinthApp.png")
+psremote_app = create_app("PS Remote Play", "PlayStation.PSRemotePlay", "https://remoteplay.dl.playstation.net/remoteplay/", "PlayStation.PSRemotePlay.png")
+psaccessories_app = create_app("PlayStation Accessories", "PlayStation.PlayStationAccessories", "https://controller.dl.playstation.net/controller/", "PlayStation.PlayStationAccessories.png")
+bluestacks_app = create_app("BlueStacks 5", "BlueStack.BlueStacks", "https://www.bluestacks.com/", "BlueStack.BlueStacks.png")
+faceit_app = create_app("FACEIT", "FACEITLTD.FACEITClient", "https://www.faceit.com/", "FACEITLTD.FACEITClient.png")
+faceit_ac_app = create_app("FACEIT Anti-Cheat", "FACEITLTD.FACEITAC", "https://www.faceit.com/en/anti-cheat", "FACEITLTD.FACEITClient.png")
+ftb_app = create_app("FTB Electron App", "FTB.App", "https://feed-the-beast.com/", "FeedTheBeast.FTBApp.png")
+warthunder_app = create_app("War Thunder", "GaijinNetwork.WarThunder", "https://warthunder.com/", "GaijinNetwork.WarThunder.png")
+minecraft_app = create_app("Minecraft Launcher", "Mojang.MinecraftLauncher", "https://www.minecraft.net/", "Mojang.MinecraftLauncher.png")
+maniaplanet_app = create_app("ManiaPlanet", "Nadeo.ManiaPlanet", "https://www.maniaplanet.com/", "Nadeo.ManiaPlanet.png")
 
 # --- Nvidia Nástroje ---
-geforcenow_app = {"name": "GeForce NOW", "id": "Nvidia.GeForceNOW", "website": "https://www.nvidia.com/en-us/geforce-now/", "icon_url": get_icon("Nvidia.GeForceNOW.png")}
-cuda_app = {"name": "CUDA Toolkit", "id": "Nvidia.CUDA", "website": "https://developer.nvidia.com/cuda-toolkit", "icon_url": get_icon("Nvidia.GeForceNOW.png")}
-physx_app = {"name": "NVIDIA PhysX", "id": "Nvidia.PhysX", "website": "https://www.nvidia.com/", "icon_url": get_icon("Nvidia.GeForceNOW.png")}
-rtxvoice_app = {"name": "NVIDIA RTX Voice", "id": "Nvidia.RTXVoice", "website": "https://www.nvidia.com/", "icon_url": get_icon("Nvidia.GeForceNOW.png")}
+geforcenow_app = create_app("GeForce NOW", "Nvidia.GeForceNOW", "https://www.nvidia.com/en-us/geforce-now/", "Nvidia.GeForceNOW.png")
+cuda_app = create_app("CUDA Toolkit", "Nvidia.CUDA", "https://developer.nvidia.com/cuda-toolkit", "Nvidia.GeForceNOW.png")
+physx_app = create_app("NVIDIA PhysX", "Nvidia.PhysX", "https://www.nvidia.com/", "Nvidia.GeForceNOW.png")
+rtxvoice_app = create_app("NVIDIA RTX Voice", "Nvidia.RTXVoice", "https://www.nvidia.com/", "Nvidia.GeForceNOW.png")
 
 # --- Prohlížeče ---
-chrome_app = {"name": "Google Chrome", "id": "Google.Chrome", "website": "https://www.google.com/chrome", "icon_url": get_icon("Google.Chrome.png")}
-firefox_app = {"name": "Mozilla Firefox", "id": "Mozilla.Firefox", "website": "https://www.mozilla.org/firefox", "icon_url": get_icon("Mozilla.Firefox.png")}
-edge_app = {"name": "Microsoft Edge", "id": "Microsoft.Edge", "website": "https://www.microsoft.com/edge", "icon_url": get_icon("Microsoft.Edge.png")}
-brave_app = {"name": "Brave Browser", "id": "Brave.Brave", "website": "https://brave.com", "icon_url": get_icon("Brave.Brave.png")}
-opera_app = {"name": "Opera", "id": "Opera.Opera", "website": "https://www.opera.com", "icon_url": get_icon("Opera.Opera.png")}
-opera_gx_app = {"name": "Opera GX", "id": "Opera.OperaGX", "website": "https://www.opera.com/gx", "icon_url": get_icon("Opera.OperaGX.png")}
-vivaldi_app = {"name": "Vivaldi", "id": "Vivaldi.Vivaldi", "website": "https://vivaldi.com", "icon_url": get_icon("Vivaldi.Vivaldi.png")}
-zen_app = {"name": "Zen Browser", "id": "Zen-Team.Zen-Browser", "website": "https://www.zen-browser.app", "icon_url": get_icon("Zen-Team.Zen-Browser.png")}
-librewolf_app = {"name": "LibreWolf", "id": "LibreWolf.LibreWolf", "website": "https://librewolf.net", "icon_url": get_icon("LibreWolf.LibreWolf.png")}
-ungoogled_app = {"name": "Ungoogled Chromium", "id": "eloston.ungoogled-chromium", "website": "https://github.com/ungoogled-software/ungoogled-chromium", "icon_url": get_icon("eloston.ungoogled-chromium.png")}
-waterfox_app = {"name": "Waterfox", "id": "Waterfox.Waterfox", "website": "https://www.waterfox.net", "icon_url": get_icon("Waterfox.Waterfox.png")}
-arc_app = {"name": "Arc", "id": "TheBrowserCompany.Arc", "website": "https://arc.net/", "icon_url": get_icon("TheBrowserCompany.Arc.png")}
-tor_app = {"name": "Tor Browser", "id": "TorProject.TorBrowser", "website": "https://www.torproject.org/", "icon_url": get_icon("TorProject.TorBrowser.png")}
-duckduckgo_app = {"name": "DuckDuckGo", "id": "DuckDuckGo.DesktopBrowser", "website": "https://duckduckgo.com/windows", "icon_url": get_icon("DuckDuckGo.DesktopBrowser.png")}
-falkon_app = {"name": "Falkon", "id": "KDE.Falkon", "website": "https://www.falkon.org/", "icon_url": get_icon("KDE.Falkon.png")}
+chrome_app = create_app("Google Chrome", "Google.Chrome", "https://www.google.com/chrome", "Google.Chrome.png")
+firefox_app = create_app("Mozilla Firefox", "Mozilla.Firefox", "https://www.mozilla.org/firefox", "Mozilla.Firefox.png")
+edge_app = create_app("Microsoft Edge", "Microsoft.Edge", "https://www.microsoft.com/edge", "Microsoft.Edge.png")
+brave_app = create_app("Brave Browser", "Brave.Brave", "https://brave.com", "Brave.Brave.png")
+opera_app = create_app("Opera", "Opera.Opera", "https://www.opera.com", "Opera.Opera.png")
+opera_gx_app = create_app("Opera GX", "Opera.OperaGX", "https://www.opera.com/gx", "Opera.OperaGX.png")
+vivaldi_app = create_app("Vivaldi", "Vivaldi.Vivaldi", "https://vivaldi.com", "Vivaldi.Vivaldi.png")
+zen_app = create_app("Zen Browser", "Zen-Team.Zen-Browser", "https://www.zen-browser.app", "Zen-Team.Zen-Browser.png")
+librewolf_app = create_app("LibreWolf", "LibreWolf.LibreWolf", "https://librewolf.net", "LibreWolf.LibreWolf.png")
+ungoogled_app = create_app("Ungoogled Chromium", "eloston.ungoogled-chromium", "https://github.com/ungoogled-software/ungoogled-chromium", "eloston.ungoogled-chromium.png")
+waterfox_app = create_app("Waterfox", "Waterfox.Waterfox", "https://www.waterfox.net", "Waterfox.Waterfox.png")
+arc_app = create_app("Arc", "TheBrowserCompany.Arc", "https://arc.net/", "TheBrowserCompany.Arc.png")
+tor_app = create_app("Tor Browser", "TorProject.TorBrowser", "https://www.torproject.org/", "TorProject.TorBrowser.png")
+duckduckgo_app = create_app("DuckDuckGo", "DuckDuckGo.DesktopBrowser", "https://duckduckgo.com/windows", "DuckDuckGo.DesktopBrowser.png")
+falkon_app = create_app("Falkon", "KDE.Falkon", "https://www.falkon.org/", "KDE.Falkon.png")
 
 # --- Komunikace ---
-discord_app = {"name": "Discord", "id": "Discord.Discord", "website": "https://discord.com", "icon_url": get_icon("Discord.Discord.png")}
-telegram_app = {"name": "Telegram", "id": "Telegram.TelegramDesktop", "website": "https://desktop.telegram.org", "icon_url": get_icon("Telegram.TelegramDesktop.png")}
-teams_app = {"name": "Teams", "id": "Microsoft.Teams", "website": "https://www.microsoft.com/microsoft-teams", "icon_url": get_icon("Microsoft.Teams.png")}
-teamspeak_app = {"name": "TeamSpeak 3", "id": "TeamSpeakSystems.TeamSpeakClient", "website": "https://teamspeak.com/", "icon_url": get_icon("TeamSpeakSystems.TeamSpeakClient.png")}
-teamspeak6_app = {"name": "TeamSpeak 6", "id": "TeamSpeakSystems.TeamSpeakClient.Beta.6", "website": "https://teamspeak.com/", "icon_url": get_icon("TeamSpeakSystems.TeamSpeakClient.Beta.6.png")}
-slack_app = {"name": "Slack", "id": "SlackTechnologies.Slack", "website": "https://slack.com/", "icon_url": get_icon("SlackTechnologies.Slack.png")}
-zoom_app = {"name": "Zoom", "id": "Zoom.Zoom", "website": "https://zoom.us/", "icon_url": get_icon("Zoom.Zoom.png")}
-thunderbird_app = {"name": "Thunderbird", "id": "Mozilla.Thunderbird", "website": "https://www.thunderbird.net/", "icon_url": get_icon("Mozilla.Thunderbird.png")}
-betterbird_app = {"name": "Betterbird", "id": "Betterbird.Betterbird", "website": "https://www.betterbird.eu/", "icon_url": get_icon("Betterbird.Betterbird.png")}
-viber_app = {"name": "Viber", "id": "Rakuten.Viber", "website": "https://www.viber.com/", "icon_url": get_icon("Rakuten.Viber.png")}
-beeper_app = {"name": "Beeper", "id": "Beeper.Beeper", "website": "https://www.beeper.com/", "icon_url": get_icon("Beeper.Beeper.png")}
-bluemail_app = {"name": "BlueMail", "id": "Blix.BlueMail", "website": "https://bluemail.me/", "icon_url": get_icon("Blix.BlueMail.png")}
+discord_app = create_app("Discord", "Discord.Discord", "https://discord.com", "Discord.Discord.png")
+telegram_app = create_app("Telegram", "Telegram.TelegramDesktop", "https://desktop.telegram.org", "Telegram.TelegramDesktop.png")
+teams_app = create_app("Teams", "Microsoft.Teams", "https://www.microsoft.com/microsoft-teams", "Microsoft.Teams.png")
+teamspeak_app = create_app("TeamSpeak 3", "TeamSpeakSystems.TeamSpeakClient", "https://teamspeak.com/", "TeamSpeakSystems.TeamSpeakClient.png")
+teamspeak6_app = create_app("TeamSpeak 6", "TeamSpeakSystems.TeamSpeakClient.Beta.6", "https://teamspeak.com/", "TeamSpeakSystems.TeamSpeakClient.Beta.6.png")
+slack_app = create_app("Slack", "SlackTechnologies.Slack", "https://slack.com/", "SlackTechnologies.Slack.png")
+zoom_app = create_app("Zoom", "Zoom.Zoom", "https://zoom.us/", "Zoom.Zoom.png")
+thunderbird_app = create_app("Thunderbird", "Mozilla.Thunderbird", "https://www.thunderbird.net/", "Mozilla.Thunderbird.png")
+betterbird_app = create_app("Betterbird", "Betterbird.Betterbird", "https://www.betterbird.eu/", "Betterbird.Betterbird.png")
+viber_app = create_app("Viber", "Rakuten.Viber", "https://www.viber.com/", "Rakuten.Viber.png")
+beeper_app = create_app("Beeper", "Beeper.Beeper", "https://www.beeper.com/", "Beeper.Beeper.png")
+bluemail_app = create_app("BlueMail", "Blix.BlueMail", "https://bluemail.me/", "Blix.BlueMail.png")
 
 # --- Média (Audio, Video, Grafika) ---
-gimp_app = {"name": "GIMP", "id": "GIMP.GIMP.3", "website": "https://www.gimp.org", "icon_url": get_icon("GIMP.GIMP.3.png")}
-paint_net_app = {"name": "Paint.NET", "id": "dotPDN.PaintDotNet", "website": "https://www.getpaint.net", "icon_url": get_icon("dotPDN.PaintDotNet.png")}
-blender_app = {"name": "Blender", "id": "BlenderFoundation.Blender", "website": "https://www.blender.org", "icon_url": get_icon("BlenderFoundation.Blender.png")}
-vlc_app = {"name": "VLC media player", "id": "VideoLAN.VLC", "website": "https://www.videolan.org/vlc", "icon_url": get_icon("VideoLAN.VLC.png")}
-mpv_app = {"name": "mpv", "id": "shinchiro.mpv", "website": "https://mpv.io/", "icon_url": get_icon("shinchiro.mpv.png")}
-stremio_app = {"name": "Stremio", "id": "Stremio.Stremio", "website": "https://www.stremio.com/", "icon_url": get_icon("Stremio.Stremio.png")}
-audacity_app = {"name": "Audacity", "id": "Audacity.Audacity", "website": "https://www.audacityteam.org", "icon_url": get_icon("Audacity.Audacity.png")}
-aimp_app = {"name": "AIMP", "id": "AIMP.AIMP", "website": "https://www.aimp.ru/", "icon_url": get_icon("AIMP.AIMP.png")}
-fxsound_app = {"name": "FxSound", "id": "FxSound.FxSound", "website": "https://www.fxsound.com/", "icon_url": get_icon("FxSound.FxSound.png")}
-obs_app = {"name": "OBS Studio", "id": "OBSProject.OBSStudio", "website": "https://obsproject.com/", "icon_url": get_icon("OBSProject.OBSStudio.png")}
-inkscape_app = {"name": "Inkscape", "id": "Inkscape.Inkscape", "website": "https://inkscape.org/", "icon_url": get_icon("Inkscape.Inkscape.png")}
-irfanview_app = {"name": "IrfanView", "id": "IrfanSkiljan.IrfanView", "website": "https://www.irfanview.com/", "icon_url": get_icon("IrfanSkiljan.IrfanView.png")}
-krita_app = {"name": "Krita", "id": "KDE.Krita", "website": "https://krita.org/", "icon_url": get_icon("KDE.Krita.png")}
-affinity_app = {"name": "Affinity", "id": "Canva.Affinity", "website": "https://affinity.serif.com/", "icon_url": get_icon("Canva.Affinity.png")}
-spotify_app = {"name": "Spotify", "id": "Spotify.Spotify", "website": "https://www.spotify.com/", "icon_url": get_icon("Spotify.Spotify.png")}
-itunes_app = {"name": "iTunes", "id": "Apple.iTunes", "website": "https://www.apple.com/itunes/", "icon_url": get_icon("Apple.iTunes.png")}
-ytdownloader_app = {"name": "4K Video Downloader", "id": "OpenMedia.4KVideoDownloader", "website": "https://www.4kdownload.com/", "icon_url": get_icon("OpenMedia.4KVideoDownloader.png")}
-honeyview_app = {"name": "Honeyview", "id": "Bandisoft.Honeyview", "website": "https://cz.bandisoft.com/honeyview/", "icon_url": get_icon("Bandisoft.Honeyview.png")}
-bandiview_app = {"name": "BandiView", "id": "Bandisoft.BandiView", "website": "https://www.bandisoft.com/bandiview/", "icon_url": get_icon("Bandisoft.BandiView.png")}
-bandicut_app = {"name": "Bandicut", "id": "BandicamCompany.Bandicut", "website": "https://www.bandicam.com/bandicut-video-cutter/", "icon_url": get_icon("BandicamCompany.Bandicut.png")}
-bandicam_app = {"name": "Bandicam", "id": "BandicamCompany.Bandicam", "website": "https://www.bandicam.com/", "icon_url": get_icon("BandicamCompany.Bandicam.png")}
-capcut_app = {"name": "CapCut", "id": "ByteDance.CapCut", "website": "https://www.capcut.com/", "icon_url": get_icon("ByteDance.CapCut.png")}
-pixso_app = {"name": "Pixso", "id": "Bosyun.Pixso", "website": "https://pixso.net/", "icon_url": get_icon("Bosyun.Pixso.png")}
-deezer_app = {"name": "Deezer", "id": "Deezer.Deezer", "website": "https://www.deezer.com/", "icon_url": get_icon("Deezer.Deezer.png")}
-handbrake_app = {"name": "HandBrake", "id": "Handbrake.Handbrake", "website": "https://handbrake.fr/", "icon_url": get_icon("Handbrake.Handbrake.png")}
-qview_app = {"name": "qView", "id": "jurplel.qView", "website": "https://interversehq.com/qview/", "icon_url": get_icon("jurplel.qView.png")}
-imgburn_app = {"name": "ImgBurn", "id": "LIGHTNINGUK.ImgBurn", "website": "https://www.imgburn.com/", "icon_url": get_icon("LIGHTNINGUK.ImgBurn.png")}
-fontbase_app = {"name": "FontBase", "id": "Levitsky.FontBase", "website": "https://fontba.se/", "icon_url": get_icon("Levitsky.FontBase.png")}
-asio4all_app = {"name": "ASIO4ALL", "id": "MichaelTippach.ASIO4ALL", "website": "https://www.asio4all.org/", "icon_url": get_icon("MichaelTippach.ASIO4ALL.png")}
-musescore_app = {"name": "MuseScore", "id": "Musescore.Musescore", "website": "https://musescore.org/", "icon_url": get_icon("Musescore.Musescore.png")}
-pixelorama_app = {"name": "Pixelorama", "id": "OramaInteractive.Pixelorama", "website": "https://orama-interactive.itch.io/pixelorama", "icon_url": get_icon("OramaInteractive.Pixelorama.png")}
-spotiflyer_app = {"name": "SpotiFlyer", "id": "Shabinder.SpotiFlyer", "website": "https://github.com/Shabinder/SpotiFlyer", "icon_url": get_icon("Shabinder.SpotiFlyer.png")}
-streamlabs_app = {"name": "Streamlabs", "id": "Streamlabs.Streamlabs", "website": "https://streamlabs.com/", "icon_url": get_icon("Streamlabs.Streamlabs.png")}
+gimp_app = create_app("GIMP", "GIMP.GIMP.3", "https://www.gimp.org", "GIMP.GIMP.3.png")
+paint_net_app = create_app("Paint.NET", "dotPDN.PaintDotNet", "https://www.getpaint.net", "dotPDN.PaintDotNet.png")
+blender_app = create_app("Blender", "BlenderFoundation.Blender", "https://www.blender.org", "BlenderFoundation.Blender.png")
+vlc_app = create_app("VLC media player", "VideoLAN.VLC", "https://www.videolan.org/vlc", "VideoLAN.VLC.png")
+mpv_app = create_app("mpv", "shinchiro.mpv", "https://mpv.io/", "shinchiro.mpv.png")
+stremio_app = create_app("Stremio", "Stremio.Stremio", "https://www.stremio.com/", "Stremio.Stremio.png")
+audacity_app = create_app("Audacity", "Audacity.Audacity", "https://www.audacityteam.org", "Audacity.Audacity.png")
+aimp_app = create_app("AIMP", "AIMP.AIMP", "https://www.aimp.ru/", "AIMP.AIMP.png")
+fxsound_app = create_app("FxSound", "FxSound.FxSound", "https://www.fxsound.com/", "FxSound.FxSound.png")
+obs_app = create_app("OBS Studio", "OBSProject.OBSStudio", "https://obsproject.com/", "OBSProject.OBSStudio.png")
+inkscape_app = create_app("Inkscape", "Inkscape.Inkscape", "https://inkscape.org/", "Inkscape.Inkscape.png")
+irfanview_app = create_app("IrfanView", "IrfanSkiljan.IrfanView", "https://www.irfanview.com/", "IrfanSkiljan.IrfanView.png")
+krita_app = create_app("Krita", "KDE.Krita", "https://krita.org/", "KDE.Krita.png")
+affinity_app = create_app("Affinity", "Canva.Affinity", "https://affinity.serif.com/", "Canva.Affinity.png")
+spotify_app = create_app("Spotify", "Spotify.Spotify", "https://www.spotify.com/", "Spotify.Spotify.png")
+itunes_app = create_app("iTunes", "Apple.iTunes", "https://www.apple.com/itunes/", "Apple.iTunes.png")
+ytdownloader_app = create_app("4K Video Downloader", "OpenMedia.4KVideoDownloader", "https://www.4kdownload.com/", "OpenMedia.4KVideoDownloader.png")
+honeyview_app = create_app("Honeyview", "Bandisoft.Honeyview", "https://cz.bandisoft.com/honeyview/", "Bandisoft.Honeyview.png")
+bandiview_app = create_app("BandiView", "Bandisoft.BandiView", "https://www.bandisoft.com/bandiview/", "Bandisoft.BandiView.png")
+bandicut_app = create_app("Bandicut", "BandicamCompany.Bandicut", "https://www.bandicam.com/bandicut-video-cutter/", "BandicamCompany.Bandicut.png")
+bandicam_app = create_app("Bandicam", "BandicamCompany.Bandicam", "https://www.bandicam.com/", "BandicamCompany.Bandicam.png")
+capcut_app = create_app("CapCut", "ByteDance.CapCut", "https://www.capcut.com/", "ByteDance.CapCut.png")
+pixso_app = create_app("Pixso", "Bosyun.Pixso", "https://pixso.net/", "Bosyun.Pixso.png")
+deezer_app = create_app("Deezer", "Deezer.Deezer", "https://www.deezer.com/", "Deezer.Deezer.png")
+handbrake_app = create_app("HandBrake", "Handbrake.Handbrake", "https://handbrake.fr/", "Handbrake.Handbrake.png")
+qview_app = create_app("qView", "jurplel.qView", "https://interversehq.com/qview/", "jurplel.qView.png")
+imgburn_app = create_app("ImgBurn", "LIGHTNINGUK.ImgBurn", "https://www.imgburn.com/", "LIGHTNINGUK.ImgBurn.png")
+fontbase_app = create_app("FontBase", "Levitsky.FontBase", "https://fontba.se/", "Levitsky.FontBase.png")
+asio4all_app = create_app("ASIO4ALL", "MichaelTippach.ASIO4ALL", "https://www.asio4all.org/", "MichaelTippach.ASIO4ALL.png")
+musescore_app = create_app("MuseScore", "Musescore.Musescore", "https://musescore.org/", "Musescore.Musescore.png")
+pixelorama_app = create_app("Pixelorama", "OramaInteractive.Pixelorama", "https://orama-interactive.itch.io/pixelorama", "OramaInteractive.Pixelorama.png")
+spotiflyer_app = create_app("SpotiFlyer", "Shabinder.SpotiFlyer", "https://github.com/Shabinder/SpotiFlyer", "Shabinder.SpotiFlyer.png")
+streamlabs_app = create_app("Streamlabs", "Streamlabs.Streamlabs", "https://streamlabs.com/", "Streamlabs.Streamlabs.png")
 
 # --- Kancelář, PDF & Text ---
-ms_office_app = {"name": "Microsoft 365", "id": "Microsoft.OfficeDeploymentTool", "website": "https://office.com", "icon_url": get_icon("Microsoft.OfficeDeploymentTool.png")}
-libreoffice_app = {"name": "LibreOffice", "id": "TheDocumentFoundation.LibreOffice", "website": "https://www.libreoffice.org/", "icon_url": get_icon("TheDocumentFoundation.LibreOffice.png")}
-wps_app = {"name": "WPS Office", "id": "Kingsoft.WPSOffice", "website": "https://www.wps.com/", "icon_url": get_icon("Kingsoft.WPSOffice.png")}
-pdfxchange_app = {"name": "PDF-XChange Editor", "id": "TrackerSoftware.PDF-XChangeEditor", "website": "https://www.tracker-software.com/", "icon_url": get_icon("TrackerSoftware.PDF-XChangeEditor.png")}
-adobe_reader_app = {"name": "Adobe Acrobat Reader", "id": "Adobe.Acrobat.Reader.64-bit", "website": "https://get.adobe.com/reader/", "icon_url": get_icon("Adobe.Acrobat.Reader.64-bit.png")}
-notepadplus_app = {"name": "Notepad++", "id": "Notepad++.Notepad++", "website": "https://notepad-plus-plus.org/", "icon_url": get_icon("Notepad++.Notepad++.png")}
-notepads_app = {"name": "Notepads", "id": "JackieLiu.NotepadsApp", "website": "https://www.notepadsapp.com/", "icon_url": get_icon("JackieLiu.NotepadsApp.png")}
-obsidian_app = {"name": "Obsidian", "id": "Obsidian.Obsidian", "website": "https://obsidian.md/", "icon_url": get_icon("Obsidian.Obsidian.png")}
-notion_app = {"name": "Notion", "id": "Notion.Notion", "website": "https://www.notion.so/", "icon_url": get_icon("Notion.Notion.png")}
-sumatra_app = {"name": "Sumatra PDF", "id": "SumatraPDF.SumatraPDF", "website": "https://www.sumatrapdfreader.org/", "icon_url": get_icon("SumatraPDF.SumatraPDF.png")}
-onlyoffice_app = {"name": "ONLYOFFICE", "id": "ONLYOFFICE.DesktopEditors", "website": "https://www.onlyoffice.com/", "icon_url": get_icon("ONLYOFFICE.DesktopEditors.png")}
-anydo_app = {"name": "Any.do", "id": "AnyDo.AnyDo", "website": "https://www.any.do/", "icon_url": get_icon("AnyDo.AnyDo.png")}
-naps2_app = {"name": "NAPS2", "id": "Cyanfish.NAPS2", "website": "https://www.naps2.com/", "icon_url": get_icon("Cyanfish.NAPS2.png")}
-zotero_app = {"name": "Zotero", "id": "DigitalScholar.Zotero", "website": "https://www.zotero.org/", "icon_url": get_icon("DigitalScholar.Zotero.png")}
-affine_app = {"name": "AFFiNE", "id": "ToEverything.AFFiNE", "website": "https://affine.pro/", "icon_url": get_icon("ToEverything.AFFiNE.png")}
+ms_office_app = create_app("Microsoft 365", "Microsoft.OfficeDeploymentTool", "https://office.com", "Microsoft.OfficeDeploymentTool.png")
+libreoffice_app = create_app("LibreOffice", "TheDocumentFoundation.LibreOffice", "https://www.libreoffice.org/", "TheDocumentFoundation.LibreOffice.png")
+wps_app = create_app("WPS Office", "Kingsoft.WPSOffice", "https://www.wps.com/", "Kingsoft.WPSOffice.png")
+pdfxchange_app = create_app("PDF-XChange Editor", "TrackerSoftware.PDF-XChangeEditor", "https://www.tracker-software.com/", "TrackerSoftware.PDF-XChangeEditor.png")
+adobe_reader_app = create_app("Adobe Acrobat Reader", "Adobe.Acrobat.Reader.64-bit", "https://get.adobe.com/reader/", "Adobe.Acrobat.Reader.64-bit.png")
+notepadplus_app = create_app("Notepad++", "Notepad++.Notepad++", "https://notepad-plus-plus.org/", "Notepad++.Notepad++.png")
+notepads_app = create_app("Notepads", "JackieLiu.NotepadsApp", "https://www.notepadsapp.com/", "JackieLiu.NotepadsApp.png")
+obsidian_app = create_app("Obsidian", "Obsidian.Obsidian", "https://obsidian.md/", "Obsidian.Obsidian.png")
+notion_app = create_app("Notion", "Notion.Notion", "https://www.notion.so/", "Notion.Notion.png")
+sumatra_app = create_app("Sumatra PDF", "SumatraPDF.SumatraPDF", "https://www.sumatrapdfreader.org/", "SumatraPDF.SumatraPDF.png")
+onlyoffice_app = create_app("ONLYOFFICE", "ONLYOFFICE.DesktopEditors", "https://www.onlyoffice.com/", "ONLYOFFICE.DesktopEditors.png")
+anydo_app = create_app("Any.do", "AnyDo.AnyDo", "https://www.any.do/", "AnyDo.AnyDo.png")
+naps2_app = create_app("NAPS2", "Cyanfish.NAPS2", "https://www.naps2.com/", "Cyanfish.NAPS2.png")
+zotero_app = create_app("Zotero", "DigitalScholar.Zotero", "https://www.zotero.org/", "DigitalScholar.Zotero.png")
+affine_app = create_app("AFFiNE", "ToEverything.AFFiNE", "https://affine.pro/", "ToEverything.AFFiNE.png")
 
 # --- Vývojářské nástroje ---
-python_app = {"name": "Python 3", "id": "Python.Python.3.12", "website": "https://www.python.org", "icon_url": get_icon("Python.Python.3.12.png")}
-vscode_app = {"name": "VS Code", "id": "Microsoft.VisualStudioCode", "website": "https://code.visualstudio.com", "icon_url": get_icon("Microsoft.VisualStudioCode.png")}
-vscode_insiders_app = {"name": "VS Code Insiders", "id": "Microsoft.VisualStudioCode.Insiders", "website": "https://code.visualstudio.com/insiders/", "icon_url": get_icon("Microsoft.VisualStudioCode.Insiders.png")}
-github_desktop_app = {"name": "GitHub Desktop", "id": "GitHub.GitHubDesktop", "website": "https://desktop.github.com/", "icon_url": get_icon("GitHub.GitHubDesktop.png")}
-sublime_app = {"name": "Sublime Text", "id": "SublimeHQ.SublimeText.4", "website": "https://www.sublimetext.com/", "icon_url": get_icon("SublimeHQ.SublimeText.4.png")}
-vs2022_app = {"name": "Visual Studio 2022", "id": "Microsoft.VisualStudio.2022.Community", "website": "https://visualstudio.microsoft.com/", "icon_url": get_icon("Microsoft.VisualStudio.2022.Community.png")}
-nodejs_app = {"name": "Node.js", "id": "OpenJS.NodeJS", "website": "https://nodejs.org/", "icon_url": get_icon("OpenJS.NodeJS.png")}
-githubcli_app = {"name": "GitHub CLI", "id": "GitHub.cli", "website": "https://cli.github.com/", "icon_url": get_icon("GitHub.cli.png")}
-unity_app = {"name": "Unity Hub", "id": "Unity.UnityHub", "website": "https://unity.com/", "icon_url": get_icon("Unity.UnityHub.png")}
-git_app = {"name": "Git", "id": "Git.Git", "website": "https://git-scm.com/", "icon_url": get_icon("Git.Git.png")}
-mingit_app = {"name": "MinGit", "id": "Git.MinGit", "website": "https://gitforwindows.org/", "icon_url": get_icon("Git.MinGit.png")}
-cursor_app = {"name": "Cursor", "id": "Anysphere.Cursor", "website": "https://www.cursor.com/", "icon_url": get_icon("Anysphere.Cursor.png")}
-anaconda_app = {"name": "Anaconda3", "id": "Anaconda.Anaconda3", "website": "https://www.anaconda.com/", "icon_url": get_icon("Anaconda.Anaconda3.png")}
-wordpress_app = {"name": "WordPress.com", "id": "Automattic.Wordpress", "website": "https://localwp.com/", "icon_url": get_icon("Automattic.Wordpress.png")}
-sqlite_app = {"name": "DB Browser for SQLite", "id": "DBBrowserForSQLite.DBBrowserForSQLite", "website": "https://sqlitebrowser.org/", "icon_url": get_icon("DBBrowserForSQLite.DBBrowserForSQLite.png")}
-inno_app = {"name": "Inno Setup 6", "id": "jrsoftware.InnoSetup", "website": "https://jrsoftware.org/isinfo.php", "icon_url": get_icon("jrsoftware.InnoSetup.png")}
-vulkan_app = {"name": "Vulkan SDK", "id": "KhronosGroup.VulkanSDK", "website": "https://vulkan.lunarg.com/", "icon_url": get_icon("KhronosGroup.VulkanSDK.png")}
-mongodb_app = {"name": "MongoDB Compass", "id": "MongoDB.Compass.Full", "website": "https://www.mongodb.com/products/tools/compass", "icon_url": get_icon("MongoDB.Compass.Full.png")}
-ngrok_app = {"name": "ngrok", "id": "ngrok.ngrok", "website": "https://ngrok.com/", "icon_url": get_icon("ngrok.ngrok.png")}
-r_app = {"name": "R for Windows", "id": "RProject.R", "website": "https://www.r-project.org/", "icon_url": get_icon("RProject.R.png")}
-tailwindcss_app = {"name": "Tailwind CSS", "id": "TailwindLabs.TailwindCSS", "website": "https://tailwindcss.com/", "icon_url": get_icon("TailwindLabs.TailwindCSS.png")}
+python_app = create_app("Python 3", "Python.Python.3.12", "https://www.python.org", "Python.Python.3.12.png")
+vscode_app = create_app("VS Code", "Microsoft.VisualStudioCode", "https://code.visualstudio.com", "Microsoft.VisualStudioCode.png")
+vscode_insiders_app = create_app("VS Code Insiders", "Microsoft.VisualStudioCode.Insiders", "https://code.visualstudio.com/insiders/", "Microsoft.VisualStudioCode.Insiders.png")
+github_desktop_app = create_app("GitHub Desktop", "GitHub.GitHubDesktop", "https://desktop.github.com/", "GitHub.GitHubDesktop.png")
+sublime_app = create_app("Sublime Text", "SublimeHQ.SublimeText.4", "https://www.sublimetext.com/", "SublimeHQ.SublimeText.4.png")
+vs2022_app = create_app("Visual Studio 2022", "Microsoft.VisualStudio.2022.Community", "https://visualstudio.microsoft.com/", "Microsoft.VisualStudio.2022.Community.png")
+nodejs_app = create_app("Node.js", "OpenJS.NodeJS", "https://nodejs.org/", "OpenJS.NodeJS.png")
+githubcli_app = create_app("GitHub CLI", "GitHub.cli", "https://cli.github.com/", "GitHub.cli.png")
+unity_app = create_app("Unity Hub", "Unity.UnityHub", "https://unity.com/", "Unity.UnityHub.png")
+git_app = create_app("Git", "Git.Git", "https://git-scm.com/", "Git.Git.png")
+mingit_app = create_app("MinGit", "Git.MinGit", "https://gitforwindows.org/", "Git.MinGit.png")
+cursor_app = create_app("Cursor", "Anysphere.Cursor", "https://www.cursor.com/", "Anysphere.Cursor.png")
+anaconda_app = create_app("Anaconda3", "Anaconda.Anaconda3", "https://www.anaconda.com/", "Anaconda.Anaconda3.png")
+wordpress_app = create_app("WordPress.com", "Automattic.Wordpress", "https://localwp.com/", "Automattic.Wordpress.png")
+sqlite_app = create_app("DB Browser for SQLite", "DBBrowserForSQLite.DBBrowserForSQLite", "https://sqlitebrowser.org/", "DBBrowserForSQLite.DBBrowserForSQLite.png")
+inno_app = create_app("Inno Setup 6", "jrsoftware.InnoSetup", "https://jrsoftware.org/isinfo.php", "jrsoftware.InnoSetup.png")
+vulkan_app = create_app("Vulkan SDK", "KhronosGroup.VulkanSDK", "https://vulkan.lunarg.com/", "KhronosGroup.VulkanSDK.png")
+mongodb_app = create_app("MongoDB Compass", "MongoDB.Compass.Full", "https://www.mongodb.com/products/tools/compass", "MongoDB.Compass.Full.png")
+ngrok_app = create_app("ngrok", "ngrok.ngrok", "https://ngrok.com/", "ngrok.ngrok.png")
+r_app = create_app("R for Windows", "RProject.R", "https://www.r-project.org/", "RProject.R.png")
+tailwindcss_app = create_app("Tailwind CSS", "TailwindLabs.TailwindCSS", "https://tailwindcss.com/", "TailwindLabs.TailwindCSS.png")
 
 # --- Správa disků ---
-aomei_app = {"name": "AOMEI Partition Assistant", "id": "AOMEI.PartitionAssistant", "website": "https://www.diskpart.com/", "icon_url": get_icon("AOMEI.PartitionAssistant.png")}
-easeus_app = {"name": "EaseUS Partition Master", "id": "EaseUS.PartitionMaster", "website": "https://www.easeus.com/partition-manager/", "icon_url": get_icon("EaseUS.PartitionMaster.png")}
-windirstat_app = {"name": "WinDirStat", "id": "WinDirStat.WinDirStat", "website": "https://windirstat.net/", "icon_url": get_icon("WinDirStat.WinDirStat.png")}
-cdi_app = {"name": "CrystalDiskInfo", "id": "CrystalDewWorld.CrystalDiskInfo", "website": "https://crystalmark.info/en/software/crystaldiskinfo/", "icon_url": get_icon("CrystalDewWorld.CrystalDiskInfo.png")}
-cdm_app = {"name": "CrystalDiskMark", "id": "CrystalDewWorld.CrystalDiskMark", "website": "https://crystalmark.info/en/software/crystaldiskmark/", "icon_url": get_icon("CrystalDewWorld.CrystalDiskMark.png")}
-hdtune_app = {"name": "HD Tune Pro", "id": "EFDSoftware.HDTunePro", "website": "https://www.hdtune.com/", "icon_url": get_icon("EFDSoftware.HDTunePro.png")}
-kingston_app = {"name": "Kingston SSD Manager", "id": "Kingston.SSDManager", "website": "https://www.kingston.com/en/support/technical/ssdmanager", "icon_url": get_icon("Kingston.SSDManager.png")}
-rufus_app = {"name": "Rufus", "id": "Rufus.Rufus", "website": "https://rufus.ie/", "icon_url": get_icon("Rufus.Rufus.png")}
-balena_app = {"name": "balenaEtcher", "id": "Balena.Etcher", "website": "https://etcher.balena.io/", "icon_url": get_icon("Balena.Etcher.png")}
-rpi_imager_app = {"name": "Raspberry Pi Imager", "id": "RaspberryPiFoundation.RaspberryPiImager", "website": "https://www.raspberrypi.com/software/", "icon_url": get_icon("RaspberryPiFoundation.RaspberryPiImager.png")}
-ventoy_app = {"name": "Ventoy", "id": "Ventoy.Ventoy", "website": "https://www.ventoy.net/", "icon_url": get_icon("Ventoy.Ventoy.png")}
+aomei_app = create_app("AOMEI Partition Assistant", "AOMEI.PartitionAssistant", "https://www.diskpart.com/", "AOMEI.PartitionAssistant.png")
+easeus_app = create_app("EaseUS Partition Master", "EaseUS.PartitionMaster", "https://www.easeus.com/partition-manager/", "EaseUS.PartitionMaster.png")
+windirstat_app = create_app("WinDirStat", "WinDirStat.WinDirStat", "https://windirstat.net/", "WinDirStat.WinDirStat.png")
+cdi_app = create_app("CrystalDiskInfo", "CrystalDewWorld.CrystalDiskInfo", "https://crystalmark.info/en/software/crystaldiskinfo/", "CrystalDewWorld.CrystalDiskInfo.png")
+cdm_app = create_app("CrystalDiskMark", "CrystalDewWorld.CrystalDiskMark", "https://crystalmark.info/en/software/crystaldiskmark/", "CrystalDewWorld.CrystalDiskMark.png")
+hdtune_app = create_app("HD Tune Pro", "EFDSoftware.HDTunePro", "https://www.hdtune.com/", "EFDSoftware.HDTunePro.png")
+kingston_app = create_app("Kingston SSD Manager", "Kingston.SSDManager", "https://www.kingston.com/en/support/technical/ssdmanager", "Kingston.SSDManager.png")
+rufus_app = create_app("Rufus", "Rufus.Rufus", "https://rufus.ie/", "Rufus.Rufus.png")
+balena_app = create_app("balenaEtcher", "Balena.Etcher", "https://etcher.balena.io/", "Balena.Etcher.png")
+rpi_imager_app = create_app("Raspberry Pi Imager", "RaspberryPiFoundation.RaspberryPiImager", "https://www.raspberrypi.com/software/", "RaspberryPiFoundation.RaspberryPiImager.png")
+ventoy_app = create_app("Ventoy", "Ventoy.Ventoy", "https://www.ventoy.net/", "Ventoy.Ventoy.png")
 
 # --- Utilities (Systémové nástroje) ---
-winrar_app = {"name": "WinRAR", "id": "RARLab.WinRAR", "website": "https://www.win-rar.com", "icon_url": get_icon("RARLab.WinRAR.png")}
-zip7_app = {"name": "7-Zip", "id": "7zip.7zip", "website": "https://www.7-zip.org", "icon_url": get_icon("7zip.7zip.png")}
-nanazip_app = {"name": "NanaZip", "id": "M2Team.NanaZip", "website": "https://github.com/M2Team/NanaZip", "icon_url": get_icon("M2Team.NanaZip.png")}
-zip360_app = {"name": "360 Zip", "id": "360.360Zip", "website": "https://360zip.com/", "icon_url": get_icon("360.360Zip.png")}
-bandizip_app = {"name": "Bandizip", "id": "Bandisoft.Bandizip", "website": "https://cz.bandisoft.com/bandizip/", "icon_url": get_icon("Bandisoft.Bandizip.png")}
-anydesk_app = {"name": "AnyDesk", "id": "AnyDesk.AnyDesk", "website": "https://anydesk.com/", "icon_url": get_icon("AnyDesk.AnyDesk.png")}
-teamviewer_app = {"name": "TeamViewer", "id": "TeamViewer.TeamViewer", "website": "https://www.teamviewer.com/", "icon_url": get_icon("TeamViewer.TeamViewer.png")}
-cpu_z_app = {"name": "CPU-Z", "id": "CPUID.CPU-Z", "website": "https://www.cpuid.com/softwares/cpu-z.html", "icon_url": get_icon("CPUID.CPU-Z.png")}
-gpuz_app = {"name": "GPU-Z", "id": "TechPowerUp.GPU-Z", "website": "https://www.techpowerup.com/gpuz/", "icon_url": get_icon("TechPowerUp.GPU-Z.png")}
-hwinfo_app = {"name": "HWiNFO", "id": "REALiX.HWiNFO", "website": "https://www.hwinfo.com/", "icon_url": get_icon("REALiX.HWiNFO.png")}
-hwmonitor_app = {"name": "HWMonitor", "id": "CPUID.HWMonitor", "website": "https://www.cpuid.com/softwares/hwmonitor.html", "icon_url": get_icon("CPUID.HWMonitor.png")}
-aida64_app = {"name": "AIDA64 Extreme", "id": "FinalWire.AIDA64.Extreme", "website": "https://www.aida64.com/", "icon_url": get_icon("FinalWire.AIDA64.Extreme.png")}
-coretemp_app = {"name": "Core Temp", "id": "ALCPU.CoreTemp", "website": "https://www.alcpu.com/CoreTemp/", "icon_url": get_icon("ALCPU.CoreTemp.png")}
-msiafterburner_app = {"name": "MSI Afterburner", "id": "Guru3D.Afterburner", "website": "https://www.msi.com/Landing/afterburner", "icon_url": get_icon("Guru3D.Afterburner.png")}
-jdownloader_app = {"name": "JDownloader 2", "id": "AppWork.JDownloader", "website": "https://jdownloader.org/", "icon_url": get_icon("AppWork.JDownloader.png")}
-qbittorrent_app = {"name": "qBittorrent", "id": "qBittorrent.qBittorrent", "website": "https://www.qbittorrent.org/", "icon_url": get_icon("qBittorrent.qBittorrent.png")}
-revo_app = {"name": "Revo Uninstaller", "id": "RevoUninstaller.RevoUninstaller", "website": "https://www.revouninstaller.com/", "icon_url": get_icon("RevoUninstaller.RevoUninstaller.png")}
-gdrive_app = {"name": "Google Drive", "id": "Google.GoogleDrive", "website": "https://www.google.com/drive/", "icon_url": get_icon("Google.GoogleDrive.png")}
-dropbox_app = {"name": "Dropbox", "id": "Dropbox.Dropbox", "website": "https://www.dropbox.com/", "icon_url": get_icon("Dropbox.Dropbox.png")}
-healthcheck_app = {"name": "PC Health Check", "id": "Microsoft.WindowsPCHealthCheck", "website": "https://support.microsoft.com/", "icon_url": get_icon("Microsoft.WindowsPCHealthCheck.png")}
-fileconverter_app = {"name": "File Converter", "id": "AdrienAllard.FileConverter", "website": "https://file-converter.org/", "icon_url": get_icon("AdrienAllard.FileConverter.png")}
-rainmeter_app = {"name": "Rainmeter", "id": "Rainmeter.Rainmeter", "website": "https://www.rainmeter.net/", "icon_url": get_icon("Rainmeter.Rainmeter.png")}
-todoist_app = {"name": "Todoist", "id": "Doist.Todoist", "website": "https://todoist.com/", "icon_url": get_icon("Doist.Todoist.png")}
-ahk_app = {"name": "AutoHotkey", "id": "AutoHotkey.AutoHotkey", "website": "https://www.autohotkey.com/", "icon_url": get_icon("AutoHotkey.AutoHotkey.png")}
-totalcmd_app = {"name": "Total Commander", "id": "Ghisler.TotalCommander", "website": "https://www.ghisler.com/", "icon_url": get_icon("Ghisler.TotalCommander.png")}
-opautoclicker_app = {"name": "OP AutoClicker", "id": "OPAutoClicker.OPAutoClicker", "website": "https://www.opautoclicker.com/", "icon_url": get_icon("OPAutoClicker.OPAutoClicker.png")}
-unigetui_app = {"name": "UniGetUI", "id": "Devolutions.UniGetUI", "website": "https://github.com/marticliment/UniGetUI", "icon_url": get_icon("Devolutions.UniGetUI.png")}
-everything_app = {"name": "Everything", "id": "voidtools.Everything", "website": "https://www.voidtools.com/", "icon_url": get_icon("voidtools.Everything.png")}
-malwarebytes_app = {"name": "Malwarebytes", "id": "Malwarebytes.Malwarebytes", "website": "https://www.malwarebytes.com/", "icon_url": get_icon("Malwarebytes.Malwarebytes.png")}
-powertoys_app = {"name": "PowerToys", "id": "Microsoft.PowerToys", "website": "https://learn.microsoft.com/windows/powertoys/", "icon_url": get_icon("Microsoft.PowerToys.png")}
-adguard_app = {"name": "AdGuard Home", "id": "Adguard.AdguardHome", "website": "https://adguard.com/en/adguard-home/overview.html", "icon_url": get_icon("Adguard.AdguardHome.png")}
-bleachbit_app = {"name": "BleachBit", "id": "BleachBit.BleachBit", "website": "https://www.bleachbit.org/", "icon_url": get_icon("BleachBit.BleachBit.png")}
-bitwarden_app = {"name": "Bitwarden", "id": "Bitwarden.Bitwarden", "website": "https://bitwarden.com/", "icon_url": get_icon("Bitwarden.Bitwarden.png")}
-iconviewer_app = {"name": "IconViewer", "id": "BotProductions.IconViewer", "website": "https://www.botproductions.com/iconview/", "icon_url": get_icon("BotProductions.IconViewer.png")}
-deepl_app = {"name": "DeepL", "id": "DeepL.DeepL", "website": "https://www.deepl.com/", "icon_url": get_icon("DeepL.DeepL.png")}
-eset_app = {"name": "ESET Security", "id": "ESET.Security", "website": "https://www.eset.com/", "icon_url": get_icon("ESET.Security.png")}
-virtualclonedrive_app = {"name": "VirtualCloneDrive", "id": "ElaborateBytes.VirtualCloneDrive", "website": "https://www.elby.ch/products/vcd.html", "icon_url": get_icon("ElaborateBytes.VirtualCloneDrive.png")}
-localsend_app = {"name": "LocalSend", "id": "LocalSend.LocalSend", "website": "https://localsend.org/", "icon_url": get_icon("LocalSend.LocalSend.png")}
-authme_app = {"name": "AuthMe", "id": "Levminer.AuthMe", "website": "https://github.com/Levminer/authme", "icon_url": get_icon("Levminer.AuthMe.png")}
-protonvpn_app = {"name": "Proton VPN", "id": "Proton.ProtonVPN", "website": "https://protonvpn.com/", "icon_url": get_icon("Proton.ProtonVPN.png")}
-openvpn_app = {"name": "OpenVPN", "id": "OpenVPNTechnologies.OpenVPN", "website": "https://openvpn.net/", "icon_url": get_icon("OpenVPNTechnologies.OpenVPN.png")}
-owncloud_app = {"name": "ownCloud", "id": "ownCloud.ownCloudDesktop", "website": "https://owncloud.com/", "icon_url": get_icon("ownCloud.ownCloudDesktop.png")}
-registryfinder_app = {"name": "Registry Finder", "id": "SergeyFilippov.RegistryFinder", "website": "https://registry-finder.com/", "icon_url": get_icon("SergeyFilippov.RegistryFinder.png")}
-fdm_app = {"name": "Free Download Manager", "id": "SoftDeluxe.FreeDownloadManager", "website": "https://www.freedownloadmanager.org/", "icon_url": get_icon("SoftDeluxe.FreeDownloadManager.png")}
-spicetify_app = {"name": "Spicetify", "id": "Spicetify.Spicetify", "website": "https://spicetify.app/", "icon_url": get_icon("Spicetify.Spicetify.png")}
-sdi_app = {"name": "Snappy Driver Installer", "id": "GlennDelahoy.SnappyDriverInstallerOrigin", "website": "https://www.snappy-driver-installer.org/", "icon_url": get_icon("GlennDelahoy.SnappyDriverInstallerOrigin.png")}
-transmission_app = {"name": "Transmission", "id": "Transmission.Transmission", "website": "https://transmissionbt.com/", "icon_url": get_icon("Transmission.Transmission.png")}
-eartrumpet_app = {"name": "EarTrumpet", "id": "File-New-Project.EarTrumpet", "website": "https://eartrumpet.app/", "icon_url": get_icon("File-New-Project.EarTrumpet.png")}
+winrar_app = create_app("WinRAR", "RARLab.WinRAR", "https://www.win-rar.com", "RARLab.WinRAR.png")
+zip7_app = create_app("7-Zip", "7zip.7zip", "https://www.7-zip.org", "7zip.7zip.png")
+nanazip_app = create_app("NanaZip", "M2Team.NanaZip", "https://github.com/M2Team/NanaZip", "M2Team.NanaZip.png")
+zip360_app = create_app("360 Zip", "360.360Zip", "https://360zip.com/", "360.360Zip.png")
+bandizip_app = create_app("Bandizip", "Bandisoft.Bandizip", "https://cz.bandisoft.com/bandizip/", "Bandisoft.Bandizip.png")
+anydesk_app = create_app("AnyDesk", "AnyDesk.AnyDesk", "https://anydesk.com/", "AnyDesk.AnyDesk.png")
+teamviewer_app = create_app("TeamViewer", "TeamViewer.TeamViewer", "https://www.teamviewer.com/", "TeamViewer.TeamViewer.png")
+cpu_z_app = create_app("CPU-Z", "CPUID.CPU-Z", "https://www.cpuid.com/softwares/cpu-z.html", "CPUID.CPU-Z.png")
+gpuz_app = create_app("GPU-Z", "TechPowerUp.GPU-Z", "https://www.techpowerup.com/gpuz/", "TechPowerUp.GPU-Z.png")
+hwinfo_app = create_app("HWiNFO", "REALiX.HWiNFO", "https://www.hwinfo.com/", "REALiX.HWiNFO.png")
+hwmonitor_app = create_app("HWMonitor", "CPUID.HWMonitor", "https://www.cpuid.com/softwares/hwmonitor.html", "CPUID.HWMonitor.png")
+aida64_app = create_app("AIDA64 Extreme", "FinalWire.AIDA64.Extreme", "https://www.aida64.com/", "FinalWire.AIDA64.Extreme.png")
+coretemp_app = create_app("Core Temp", "ALCPU.CoreTemp", "https://www.alcpu.com/CoreTemp/", "ALCPU.CoreTemp.png")
+msiafterburner_app = create_app("MSI Afterburner", "Guru3D.Afterburner", "https://www.msi.com/Landing/afterburner", "Guru3D.Afterburner.png")
+jdownloader_app = create_app("JDownloader 2", "AppWork.JDownloader", "https://jdownloader.org/", "AppWork.JDownloader.png")
+qbittorrent_app = create_app("qBittorrent", "qBittorrent.qBittorrent", "https://www.qbittorrent.org/", "qBittorrent.qBittorrent.png")
+revo_app = create_app("Revo Uninstaller", "RevoUninstaller.RevoUninstaller", "https://www.revouninstaller.com/", "RevoUninstaller.RevoUninstaller.png")
+gdrive_app = create_app("Google Drive", "Google.GoogleDrive", "https://www.google.com/drive/", "Google.GoogleDrive.png")
+dropbox_app = create_app("Dropbox", "Dropbox.Dropbox", "https://www.dropbox.com/", "Dropbox.Dropbox.png")
+healthcheck_app = create_app("PC Health Check", "Microsoft.WindowsPCHealthCheck", "https://support.microsoft.com/", "Microsoft.WindowsPCHealthCheck.png")
+fileconverter_app = create_app("File Converter", "AdrienAllard.FileConverter", "https://file-converter.org/", "AdrienAllard.FileConverter.png")
+rainmeter_app = create_app("Rainmeter", "Rainmeter.Rainmeter", "https://www.rainmeter.net/", "Rainmeter.Rainmeter.png")
+todoist_app = create_app("Todoist", "Doist.Todoist", "https://todoist.com/", "Doist.Todoist.png")
+ahk_app = create_app("AutoHotkey", "AutoHotkey.AutoHotkey", "https://www.autohotkey.com/", "AutoHotkey.AutoHotkey.png")
+totalcmd_app = create_app("Total Commander", "Ghisler.TotalCommander", "https://www.ghisler.com/", "Ghisler.TotalCommander.png")
+opautoclicker_app = create_app("OP AutoClicker", "OPAutoClicker.OPAutoClicker", "https://www.opautoclicker.com/", "OPAutoClicker.OPAutoClicker.png")
+unigetui_app = create_app("UniGetUI", "Devolutions.UniGetUI", "https://github.com/marticliment/UniGetUI", "Devolutions.UniGetUI.png")
+everything_app = create_app("Everything", "voidtools.Everything", "https://www.voidtools.com/", "voidtools.Everything.png")
+malwarebytes_app = create_app("Malwarebytes", "Malwarebytes.Malwarebytes", "https://www.malwarebytes.com/", "Malwarebytes.Malwarebytes.png")
+powertoys_app = create_app("PowerToys", "Microsoft.PowerToys", "https://learn.microsoft.com/windows/powertoys/", "Microsoft.PowerToys.png")
+adguard_app = create_app("AdGuard Home", "Adguard.AdguardHome", "https://adguard.com/en/adguard-home/overview.html", "Adguard.AdguardHome.png")
+bleachbit_app = create_app("BleachBit", "BleachBit.BleachBit", "https://www.bleachbit.org/", "BleachBit.BleachBit.png")
+bitwarden_app = create_app("Bitwarden", "Bitwarden.Bitwarden", "https://bitwarden.com/", "Bitwarden.Bitwarden.png")
+iconviewer_app = create_app("IconViewer", "BotProductions.IconViewer", "https://www.botproductions.com/iconview/", "BotProductions.IconViewer.png")
+deepl_app = create_app("DeepL", "DeepL.DeepL", "https://www.deepl.com/", "DeepL.DeepL.png")
+eset_app = create_app("ESET Security", "ESET.Security", "https://www.eset.com/", "ESET.Security.png")
+virtualclonedrive_app = create_app("VirtualCloneDrive", "ElaborateBytes.VirtualCloneDrive", "https://www.elby.ch/products/vcd.html", "ElaborateBytes.VirtualCloneDrive.png")
+localsend_app = create_app("LocalSend", "LocalSend.LocalSend", "https://localsend.org/", "LocalSend.LocalSend.png")
+authme_app = create_app("AuthMe", "Levminer.AuthMe", "https://github.com/Levminer/authme", "Levminer.AuthMe.png")
+protonvpn_app = create_app("Proton VPN", "Proton.ProtonVPN", "https://protonvpn.com/", "Proton.ProtonVPN.png")
+openvpn_app = create_app("OpenVPN", "OpenVPNTechnologies.OpenVPN", "https://openvpn.net/", "OpenVPNTechnologies.OpenVPN.png")
+owncloud_app = create_app("ownCloud", "ownCloud.ownCloudDesktop", "https://owncloud.com/", "ownCloud.ownCloudDesktop.png")
+registryfinder_app = create_app("Registry Finder", "SergeyFilippov.RegistryFinder", "https://registry-finder.com/", "SergeyFilippov.RegistryFinder.png")
+fdm_app = create_app("Free Download Manager", "SoftDeluxe.FreeDownloadManager", "https://www.freedownloadmanager.org/", "SoftDeluxe.FreeDownloadManager.png")
+spicetify_app = create_app("Spicetify", "Spicetify.Spicetify", "https://spicetify.app/", "Spicetify.Spicetify.png")
+sdi_app = create_app("Snappy Driver Installer", "GlennDelahoy.SnappyDriverInstallerOrigin", "https://www.snappy-driver-installer.org/", "GlennDelahoy.SnappyDriverInstallerOrigin.png")
+transmission_app = create_app("Transmission", "Transmission.Transmission", "https://transmissionbt.com/", "Transmission.Transmission.png")
+eartrumpet_app = create_app("EarTrumpet", "File-New-Project.EarTrumpet", "https://eartrumpet.app/", "File-New-Project.EarTrumpet.png")
 
 
 # ==============================================================================

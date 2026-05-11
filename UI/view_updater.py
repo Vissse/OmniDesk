@@ -8,69 +8,126 @@ from urllib.parse import urlparse
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QListWidget, QListWidgetItem, 
                              QProgressBar, QFrame, QLineEdit, QFileIconProvider,
-                             QTextEdit, QSizePolicy)
-from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QFileInfo, QTimer, QPropertyAnimation, QEasingCurve, QAbstractAnimation
+                             QTextEdit, QSizePolicy, QCheckBox, QMessageBox)
+from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QFileInfo, QTimer, QPropertyAnimation, QEasingCurve, QVariantAnimation, QRect
 from PyQt6.QtGui import QIcon, QTextCursor, QColor, QPixmap, QImage, QPainter, QPainterPath
 from core.config import COLORS, resource_path
 
-# Fallback pro HoverButton
-try:
-    from UI.view_installer import HoverButton
-except ImportError:
-    class HoverButton(QPushButton):
-        def __init__(self, t, i, s, p=None):
-            super().__init__(t, p)
-            self.setIcon(QIcon(resource_path(i)))
 
-# --- MINIMALISTICKÉ TLAČÍTKO AKTUALIZACE ---
-class UpdateIconButton(QPushButton):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFixedSize(32, 32)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip("Aktualizovat")
+# --- ANIMOVANÉ TLAČÍTKO PRO HORNÍ LIŠTU (S MODRÝM PROUŽKEM A PODPOROU DISABLED) ---
+class AnimatedActionButton(QPushButton):
+    def __init__(self, text, icon_path, parent=None):
+        super().__init__(text, parent)
+        self.setFixedHeight(34)
+        self.icon_path = icon_path
         
-        # Zkusíme použít tvůj navrhovaný box-arrow-down-thin.png, pokud není, fallback na download-simple-thin.png
-        self.icon_path = resource_path("assets/images/box-arrow-down-thin.png")
-        if not os.path.exists(self.icon_path):
-            self.icon_path = resource_path("assets/images/download-simple-thin.png")
-            
-        self._hover = False
-        self.setStyleSheet("background: transparent; border: none;")
+        self._bg_color = QColor("transparent")
+        self._bar_height_factor = 0.0
+        
+        # Pevně definované styly pro aktivní/neaktivní stav
+        self.setStyleSheet(f"""
+            QPushButton {{ 
+                background: transparent; 
+                color: {COLORS['fg']}; 
+                border: none; 
+                padding: 0 15px; 
+                font-weight: bold; 
+                font-size: 10pt; 
+                text-align: left;
+            }}
+            QPushButton:disabled {{ 
+                color: {COLORS['sub_text']}; 
+            }}
+        """)
+        
+        self.anim = QVariantAnimation(self)
+        self.anim.setDuration(200)
+        self.anim.setStartValue(0.0)
+        self.anim.setEndValue(1.0)
+        self.anim.valueChanged.connect(self._animate_step)
+        
+        self.update_visual_state()
+
+    def get_colored_icon(self, color_hex):
+        full_path = resource_path(self.icon_path)
+        if not os.path.exists(full_path): return QIcon()
+        pixmap = QPixmap(full_path)
+        colored = QPixmap(pixmap.size())
+        colored.fill(Qt.GlobalColor.transparent)
+        p = QPainter(colored)
+        p.drawPixmap(0, 0, pixmap)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        p.fillRect(colored.rect(), QColor(color_hex))
+        p.end()
+        return QIcon(colored)
+
+    def setEnabled(self, enabled):
+        super().setEnabled(enabled)
+        self.update_visual_state()
+
+    def update_visual_state(self):
+        # Nastaví správný kurzor a barvu ikony podle toho, zda je tlačítko aktivní
+        if self.isEnabled():
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            if self.icon_path:
+                self.setIcon(self.get_colored_icon(COLORS['fg']))
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            if self.icon_path:
+                self.setIcon(self.get_colored_icon(COLORS['sub_text']))
+            # Vynucené zrušení animace, pokud se tlačítko vypne během hoveru
+            self.anim.stop()
+            self._bar_height_factor = 0.0
+            self._bg_color = QColor("transparent")
+        self.update()
+
+    def _animate_step(self, val):
+        self._bar_height_factor = val
+        target_bg = QColor(COLORS['item_hover'])
+        self._bg_color = QColor(target_bg.red(), target_bg.green(), target_bg.blue(), int(255 * val))
+        self.update()
+
+    def enterEvent(self, event):
+        if self.isEnabled():
+            self.anim.setDirection(QVariantAnimation.Direction.Forward)
+            self.anim.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if self.isEnabled():
+            self.anim.setDirection(QVariantAnimation.Direction.Backward)
+            self.anim.start()
+        else:
+            self._bar_height_factor = 0.0
+            self._bg_color = QColor("transparent")
+            self.update()
+        super().leaveEvent(event)
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
-        if self._hover:
-            p.setBrush(QColor(COLORS['item_hover']))
+        rect = self.rect()
+        radius = 6
+
+        if self._bg_color.alpha() > 0:
+            p.setBrush(self._bg_color)
             p.setPen(Qt.PenStyle.NoPen)
-            p.drawEllipse(self.rect())
-            
-        if os.path.exists(self.icon_path):
-            pix = QPixmap(self.icon_path).scaled(18, 18, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            colored_pix = QPixmap(pix.size())
-            colored_pix.fill(Qt.GlobalColor.transparent)
-            
-            cp = QPainter(colored_pix)
-            cp.drawPixmap(0, 0, pix)
-            cp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-            # Ikona je šedá (sub_text), po najetí zmodrá (accent)
-            color = QColor(COLORS['accent']) if self._hover else QColor(COLORS['sub_text'])
-            cp.fillRect(colored_pix.rect(), color)
-            cp.end()
-            
-            x = (self.width() - 18) // 2
-            y = (self.height() - 18) // 2
-            p.drawPixmap(x, y, colored_pix)
+            p.drawRoundedRect(rect, radius, radius)
 
-    def enterEvent(self, event):
-        self._hover = True
-        self.update()
-
-    def leaveEvent(self, event):
-        self._hover = False
-        self.update()
+        if self._bar_height_factor > 0:
+            p.setBrush(QColor(COLORS['accent']))
+            p.setPen(Qt.PenStyle.NoPen)
+            h = rect.height() * self._bar_height_factor
+            y = rect.y() + (rect.height() - h) / 2
+            
+            path = QPainterPath()
+            path.addRoundedRect(rect.x(), rect.y(), rect.width(), rect.height(), radius, radius)
+            p.setClipPath(path)
+            p.drawRect(QRect(rect.x(), int(y), 4, int(h)))
+            p.setClipping(False)
+            
+        p.end()
+        super().paintEvent(event)
 
 
 # --- WORKER PRO STAHOVÁNÍ IKON ---
@@ -240,44 +297,51 @@ class ScanWorker(QThread):
         except Exception as e: 
             self.error.emit(str(e))
 
-# --- 2. UPDATE WORKER ---
+# --- 2. UPDATE WORKER PRO VÍCE APLIKACÍ ---
 class UpdateWorker(QThread):
     finished = pyqtSignal()
     log_signal = pyqtSignal(str)
 
-    def __init__(self, app_id=None, update_all=False):
+    def __init__(self, app_ids=None, update_all=False):
         super().__init__()
-        self.app_id = app_id
+        self.app_ids = app_ids or []
         self.update_all = update_all
         self.process = None 
+        self.is_cancelled = False
 
     def run(self):
-        cmd = ["winget", "upgrade"]
-        if self.update_all:
-            cmd.extend(["--all", "--include-unknown"])
-        else:
-            cmd.extend(["--id", self.app_id, "--exact"])
+        cmd_base = ["winget", "upgrade", "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements", "--verbose"]
         
-        cmd.extend(["--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements", "--verbose"])
-
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
 
         try:
+            if self.update_all:
+                self.log_signal.emit("\n--- HROMADNÁ AKTUALIZACE VŠECH BALÍČKŮ ---")
+                self._execute(cmd_base + ["--all", "--include-unknown"], startupinfo)
+            else:
+                for aid in self.app_ids:
+                    if self.is_cancelled: break
+                    self.log_signal.emit(f"\n--- AKTUALIZUJI: {aid} ---")
+                    self._execute(cmd_base + ["--id", aid, "--exact"], startupinfo)
+        except Exception as e:
+            self.log_signal.emit(f"Kritická chyba: {str(e)}")
+            
+        self.finished.emit()
+
+    def _execute(self, cmd, startupinfo):
+        try:
             self.process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding='utf-8',
-                errors='replace',
-                startupinfo=startupinfo,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding='utf-8', errors='replace',
+                startupinfo=startupinfo, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
                 bufsize=1
             )
-
             for line in self.process.stdout:
+                if self.is_cancelled:
+                    self.process.kill()
+                    break
                 clean_line = line.strip()
                 if clean_line:
                     self.log_signal.emit(clean_line)
@@ -285,29 +349,46 @@ class UpdateWorker(QThread):
             self.process.wait()
         except Exception as e:
             self.log_signal.emit(f"CHYBA PROCESU: {str(e)}")
-        
-        self.finished.emit()
 
     def kill_process(self):
+        self.is_cancelled = True
         if self.process:
             try: self.process.kill() 
             except: pass
 
-# --- 3. UI KOMPONENTY ---
 
+# --- 3. WIDGET ŘÁDKU (S ANIMACÍ HEALTH, CHECKBOXEM A BEZ TLAČÍTKA NA STAŽENÍ) ---
 class UpdateRowWidget(QWidget):
     def __init__(self, data, parent_page):
         super().__init__()
         self.data = data
         self.parent_page = parent_page
         
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(5, 5, 20, 5) # Zvětšený pravý okraj pro lepší zarovnání ikony
-        layout.setSpacing(15)
-        layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.setFixedHeight(55) 
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self._bg_color = QColor("transparent")
+        self._bar_height_factor = 0.0
 
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(15, 2, 20, 2)
+        layout.setSpacing(15)
+        layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+        # 1. Checkbox
+        self.chk = QCheckBox()
+        self.chk.setFixedWidth(24)
+        self.chk.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.chk.setStyleSheet(f"""
+            QCheckBox::indicator {{ width: 18px; height: 18px; border: 1px solid {COLORS['sub_text']}; border-radius: 4px; background: transparent; }}
+            QCheckBox::indicator:checked {{ background-color: {COLORS['accent']}; border-color: {COLORS['accent']}; image: url(check.png); }} 
+        """)
+        self.chk.stateChanged.connect(self.parent_page.update_selection_ui)
+        layout.addWidget(self.chk)
+
+        # 2. Ikona
         self.icon_lbl = QLabel()
-        self.icon_lbl.setFixedSize(24, 24)
+        self.icon_lbl.setFixedSize(28, 28)
         
         found_local = self.set_local_icon(data['name'], data['id'])
         if not found_local:
@@ -321,24 +402,97 @@ class UpdateRowWidget(QWidget):
         
         layout.addWidget(self.icon_lbl)
 
+        # 3. Texty vedle sebe 
+        text_layout = QHBoxLayout()
+        text_layout.setSpacing(10)
+        text_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
         name_lbl = QLabel(data['name'])
-        name_lbl.setStyleSheet("font-weight: bold; color: white; background: transparent;")
-        layout.addWidget(name_lbl, stretch=1)
-
+        name_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: white; background: transparent;")
+        
         curr_lbl = QLabel(data['current'])
-        curr_lbl.setFixedWidth(140)
-        curr_lbl.setStyleSheet(f"color: {COLORS['sub_text']}; background: transparent;")
-        layout.addWidget(curr_lbl)
-
+        curr_lbl.setStyleSheet(f"font-size: 13px; color: {COLORS['sub_text']}; background: transparent;")
+        
+        self.sep_lbl = QLabel()
+        self.sep_lbl.setFixedSize(16, 16)
+        arrow_path = resource_path("assets/images/right-arrow-thin.png")
+        if not os.path.exists(arrow_path):
+            arrow_path = resource_path("assets/images/arrow-right-thin.png")
+            
+        if os.path.exists(arrow_path):
+            pix = QPixmap(arrow_path).scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            colored_pix = QPixmap(pix.size())
+            colored_pix.fill(Qt.GlobalColor.transparent)
+            cp = QPainter(colored_pix)
+            cp.drawPixmap(0, 0, pix)
+            cp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            cp.fillRect(colored_pix.rect(), QColor(COLORS['sub_text'])) 
+            cp.end()
+            self.sep_lbl.setPixmap(colored_pix)
+        else:
+            self.sep_lbl.setText("→")
+            self.sep_lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {COLORS['sub_text']}; background: transparent;")
+        
         new_lbl = QLabel(data['new'])
-        new_lbl.setFixedWidth(140)
-        new_lbl.setStyleSheet(f"color: {COLORS['accent']}; font-weight: bold; background: transparent;")
-        layout.addWidget(new_lbl)
+        new_lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {COLORS['accent']}; background: transparent;")
 
-        # Použití nového minimalistického tlačítka
-        self.btn_up = UpdateIconButton()
-        self.btn_up.clicked.connect(lambda: self.parent_page.run_update(data['id'], data['name']))
-        layout.addWidget(self.btn_up)
+        text_layout.addWidget(name_lbl)
+        text_layout.addSpacing(5)
+        text_layout.addWidget(curr_lbl)
+        text_layout.addWidget(self.sep_lbl)
+        text_layout.addWidget(new_lbl)
+        text_layout.addStretch() 
+        
+        layout.addLayout(text_layout, stretch=1)
+
+        self.anim = QVariantAnimation(self)
+        self.anim.setDuration(200)
+        self.anim.setStartValue(0.0)
+        self.anim.setEndValue(1.0)
+        self.anim.valueChanged.connect(self._animate_step)
+
+    def _animate_step(self, val):
+        self._bar_height_factor = val
+        target_bg = QColor(COLORS['item_hover'])
+        self._bg_color = QColor(target_bg.red(), target_bg.green(), target_bg.blue(), int(255 * val))
+        self.update()
+
+    def enterEvent(self, event):
+        self.anim.setDirection(QVariantAnimation.Direction.Forward)
+        self.anim.start()
+
+    def leaveEvent(self, event):
+        self.anim.setDirection(QVariantAnimation.Direction.Backward)
+        self.anim.start()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if not self.chk.underMouse():
+                self.chk.setChecked(not self.chk.isChecked())
+        super().mousePressEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect()
+        radius = 6
+        
+        if self._bg_color.alpha() > 0:
+            p.setBrush(self._bg_color)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(rect, radius, radius)
+            
+        if self._bar_height_factor > 0:
+            p.setBrush(QColor(COLORS['accent']))
+            p.setPen(Qt.PenStyle.NoPen)
+            h = rect.height() * self._bar_height_factor
+            y = rect.y() + (rect.height() - h) / 2
+            
+            path = QPainterPath()
+            path.addRoundedRect(rect.x(), rect.y(), rect.width(), rect.height(), radius, radius)
+            p.setClipPath(path)
+            p.drawRect(QRect(rect.x(), int(y), 4, int(h)))
+            p.setClipping(False)
 
     def set_local_icon(self, name, app_id):
         icon_path = find_app_icon_path(name, app_id)
@@ -398,6 +552,8 @@ class UpdateRowWidget(QWidget):
         scaled = pixmap.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         self.icon_lbl.setPixmap(scaled); self.icon_lbl.setText("")
 
+
+# --- 4. HLAVNÍ STRÁNKA (UpdaterPage) ---
 class UpdaterPage(QWidget):
     scan_finished_signal = pyqtSignal(list)
 
@@ -414,65 +570,94 @@ class UpdaterPage(QWidget):
         top_bar = QWidget()
         top_bar.setStyleSheet(f"background-color: {COLORS['bg_main']}; border-bottom: 1px solid {COLORS['border']};")
         top_l = QHBoxLayout(top_bar); top_l.setContentsMargins(20, 15, 20, 15)
-        lbl_t = QLabel("Aktualizace"); lbl_t.setStyleSheet("font-size: 14pt; font-weight: bold; color: white; border: none;")
-        top_l.addWidget(lbl_t); top_l.addSpacing(20)
+        
+        lbl_title = QLabel("Aktualizace")
+        lbl_title.setStyleSheet("font-size: 14pt; font-weight: bold; color: white; border: none;")
+        top_l.addWidget(lbl_title); top_l.addSpacing(20)
 
         self.search_container = QFrame()
         self.search_container.setFixedWidth(500); self.search_container.setFixedHeight(38)
         self.search_container.setStyleSheet(f"QFrame {{ background-color: {COLORS['input_bg']}; border: 1px solid {COLORS['border']}; border-radius: 6px; }} QFrame:focus-within {{ border: 1px solid {COLORS['accent']}; }}")
+        
         sl = QHBoxLayout(self.search_container); sl.setContentsMargins(10, 0, 5, 0); sl.setSpacing(0)
-        self.search_in = QLineEdit(); self.search_in.setPlaceholderText("Hledat v aktualizacích...")
+        
+        self.search_in = QLineEdit()
+        self.search_input_icon = QLabel()
+        self.search_input_icon.setFixedSize(32, 32)
+        self.search_in.setPlaceholderText("Hledat v aktualizacích...")
         self.search_in.setStyleSheet("border: none; color: white; background: transparent; font-size: 10pt;")
         self.search_in.textChanged.connect(self.filter_updates)
         sl.addWidget(self.search_in)
-        try:
-            btn_s = HoverButton("", "assets/images/magnifying-glass-thin.png", "fg")
-            btn_s.setFixedSize(32, 32); btn_s.setIconSize(QSize(18, 18))
-        except: btn_s = QLabel("🔍"); btn_s.setStyleSheet("border: none; color: #777;")
-        sl.addWidget(btn_s)
+        
+        # Ikona lupy
+        icon_path_search = resource_path("assets/images/magnifying-glass-thin.png")
+        if os.path.exists(icon_path_search):
+            pix_s = QPixmap(icon_path_search).scaled(18, 18, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            colored_pix = QPixmap(pix_s.size())
+            colored_pix.fill(Qt.GlobalColor.transparent)
+            cp = QPainter(colored_pix)
+            cp.drawPixmap(0, 0, pix_s)
+            cp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            cp.fillRect(colored_pix.rect(), QColor(COLORS['sub_text']))
+            cp.end()
+            self.search_input_icon.setPixmap(colored_pix)
+            
+        self.search_input_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sl.addWidget(self.search_input_icon)
+        
         top_l.addWidget(self.search_container); top_l.addStretch()
         main_layout.addWidget(top_bar)
 
         # B. PROGRESS BAR
-        self.progress = QProgressBar(); self.progress.setFixedHeight(2); self.progress.setTextVisible(False)
+        self.progress = QProgressBar()
+        self.progress.setFixedHeight(2); self.progress.setTextVisible(False)
         self.progress.setStyleSheet(f"QProgressBar {{ background: transparent; border: none; }} QProgressBar::chunk {{ background-color: {COLORS['accent']}; }}")
-        self.progress.hide(); main_layout.addWidget(self.progress)
+        self.progress.hide()
+        main_layout.addWidget(self.progress)
 
-        # C. ACTION BAR
-        act_bar = QWidget(); act_bar.setStyleSheet(f"background: {COLORS['bg_main']};")
-        al = QHBoxLayout(act_bar); al.setContentsMargins(20, 10, 20, 10); al.setSpacing(10)
-        self.btn_scan = QPushButton("  Skenovat")
-        self.btn_scan.setIcon(QIcon(resource_path("assets/images/arrows-clockwise-thin.png")))
-        self.btn_scan.setFixedHeight(34); self.btn_scan.setCursor(Qt.CursorShape.PointingHandCursor)
+        # C. ACTION BAR S NOVÝMI TLAČÍTKY A ODDĚLOVAČI
+        act_bar = QWidget()
+        act_bar.setStyleSheet(f"background: {COLORS['bg_main']};")
+        al = QHBoxLayout(act_bar)
+        al.setContentsMargins(20, 10, 20, 10)
+        al.setSpacing(10)
+
+        self.btn_scan = AnimatedActionButton(" Skenovat", "assets/images/arrows-clockwise-thin.png")
         self.btn_scan.clicked.connect(self.scan_updates)
-        self.btn_scan.setStyleSheet(f"QPushButton {{ background: {COLORS['item_bg']}; color: white; border: 1px solid {COLORS['border']}; border-radius: 6px; padding: 0 15px; font-weight: bold; }} QPushButton:hover {{ border-color: {COLORS['accent']}; }}")
         al.addWidget(self.btn_scan)
-        self.btn_up_all = QPushButton("  Aktualizovat vše")
-        self.btn_up_all.setIcon(QIcon(resource_path("assets/images/download-simple-thin.png")))
-        self.btn_up_all.setFixedHeight(34); self.btn_up_all.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_up_all.setEnabled(False); self.btn_up_all.clicked.connect(self.run_update_all)
-        self.btn_up_all.setStyleSheet(f"QPushButton {{ background: {COLORS['accent']}; color: white; border: none; border-radius: 6px; padding: 0 15px; font-weight: bold; }} QPushButton:disabled {{ background: #333; color: #555; }}")
+
+        self.add_separator(al)
+
+        self.btn_up_sel = AnimatedActionButton(" Aktualizovat vybrané", "assets/images/download-simple-thin.png")
+        self.btn_up_sel.setEnabled(False)
+        self.btn_up_sel.clicked.connect(self.run_update_selected)
+        al.addWidget(self.btn_up_sel)
+
+        self.add_separator(al)
+
+        self.btn_up_all = AnimatedActionButton(" Aktualizovat vše", "assets/images/download-simple-thin.png")
+        self.btn_up_all.setEnabled(False)
+        self.btn_up_all.clicked.connect(self.run_update_all)
         al.addWidget(self.btn_up_all)
-        al.addStretch(); self.status_lbl = QLabel("Připraveno"); self.status_lbl.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 10pt;")
-        al.addWidget(self.status_lbl); main_layout.addWidget(act_bar)
-
-        # D. HLAVIČKA
-        head = QWidget(); head.setStyleSheet(f"background: {COLORS['bg_sidebar']}; border-bottom: 1px solid {COLORS['border']};")
-        hl = QHBoxLayout(head); hl.setContentsMargins(35, 8, 35, 8); hl.setSpacing(15)
         
-        # Změněno odsazení hlaviček - sloupec AKCE odstraněn text a zmenšen tak, aby seděl nad ikony
-        for t, w, s in [("", 24, 0), ("NÁZEV APLIKACE", 0, 1), ("STÁVAJÍCÍ", 140, 0), ("NOVÁ", 140, 0), ("", 32, 0)]:
-            lbl = QLabel(t); lbl.setStyleSheet(f"font-weight: bold; color: white; font-size: 9pt; border: none;")
-            if w > 0: lbl.setFixedWidth(w)
-            hl.addWidget(lbl, stretch=s)
-        main_layout.addWidget(head)
+        al.addStretch()
+        self.status_lbl = QLabel("Připraveno"); self.status_lbl.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 10pt;")
+        al.addWidget(self.status_lbl)
+        main_layout.addWidget(act_bar)
 
-        # E. SEZNAM
+        # VODOROVNÁ ČÁRA PŘES CELOU ŠÍŘKU
+        h_sep = QFrame()
+        h_sep.setFrameShape(QFrame.Shape.HLine)
+        h_sep.setFixedHeight(1)
+        h_sep.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
+        main_layout.addWidget(h_sep)
+
+        # E. SEZNAM (Beze změn)
         self.list_widget = QListWidget()
         self.list_widget.setStyleSheet(f"""
-            QListWidget {{ background: {COLORS['bg_main']}; border: none; outline: none; padding: 0 30px; }} 
-            QListWidget::item {{ border-bottom: 1px solid {COLORS['border']}; padding: 0px; }} 
-            QListWidget::item:hover {{ background: {COLORS['item_hover']}; }} 
+            QListWidget {{ background: {COLORS['bg_main']}; border: none; outline: none; padding: 10px 20px; }} 
+            QListWidget::item {{ border-bottom: 1px solid transparent; padding: 0px; }} 
+            QListWidget::item:hover {{ background: transparent; }} 
             QScrollBar:vertical {{ border: none; background-color: transparent; width: 8px; margin: 0px; }}
             QScrollBar::handle:vertical {{ background-color: {COLORS.get('accent', '#0078d4')}; min-height: 30px; border-radius: 4px; }}
             QScrollBar::handle:vertical:hover {{ background-color: {COLORS.get('accent_hover', '#1f8ad2')}; }}
@@ -505,13 +690,9 @@ class UpdaterPage(QWidget):
             QTextEdit {{ background: transparent; color: #ccc; border: none; font-family: 'Consolas', 'Courier New', monospace; font-size: 11px; }} 
             QScrollBar:vertical {{ border: none; background-color: transparent; width: 8px; margin: 0px; }}
             QScrollBar::handle:vertical {{ background-color: {COLORS.get('accent', '#0078d4')}; min-height: 30px; border-radius: 4px; }}
-            QScrollBar::handle:vertical:hover {{ background-color: {COLORS.get('accent_hover', '#1f8ad2')}; }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: none; }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
         """)
         ccl.addWidget(self.console_out)
         
-        # ZPĚT PŘIDANÝ PROGRESS BAR
         self.con_progress = QProgressBar(); self.con_progress.setFixedHeight(3); self.con_progress.setTextVisible(False)
         self.con_progress.setStyleSheet(f"QProgressBar {{ border: none; background: #222; border-radius: 1px; }} QProgressBar::chunk {{ background-color: {COLORS['accent']}; border-radius: 1px; }}")
         self.con_progress.setRange(0, 0); ccl.addWidget(self.con_progress)
@@ -519,8 +700,23 @@ class UpdaterPage(QWidget):
         main_layout.addWidget(self.console_container)
         self.anim = QPropertyAnimation(self.console_container, b"maximumHeight"); self.anim.setDuration(400); self.anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
+    def add_separator(self, layout):
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFixedWidth(1)
+        sep.setFixedHeight(18)
+        sep.setStyleSheet(f"background: {COLORS['border']}; border: none;")
+        layout.addWidget(sep)
+
     def scan_updates(self):
-        self.list_widget.clear(); self.all_updates = []; self.btn_scan.setEnabled(False); self.btn_up_all.setEnabled(False)
+        self.list_widget.clear(); self.all_updates = []; self.btn_scan.setEnabled(False)
+        
+        self.btn_up_sel.setEnabled(False)
+        self.btn_up_sel.setText(" Aktualizovat vybrané")
+        
+        self.btn_up_all.setEnabled(False)
+        self.btn_up_all.setText(" Aktualizovat vše")
+
         self.status_lbl.setText("Hledám aktualizace..."); self.progress.setRange(0, 0); self.progress.show()
         self.worker = ScanWorker(); self.worker.finished.connect(self.on_scan_done); self.worker.error.connect(lambda e: self.on_scan_done([])); self.worker.start()
 
@@ -528,21 +724,41 @@ class UpdaterPage(QWidget):
         updates.sort(key=lambda x: x['name'].lower())
         self.progress.hide(); self.btn_scan.setEnabled(True); self.all_updates = updates
         self.render_list(updates); self.scan_finished_signal.emit(updates)
-        if updates: self.status_lbl.setText(f"Nalezeno {len(updates)} aktualizací"); self.btn_up_all.setEnabled(True); self.btn_up_all.setText(f"  Aktualizovat vše ({len(updates)})")
-        else: self.status_lbl.setText("Vše aktuální")
+        
+        if updates: 
+            self.status_lbl.setText(f"Nalezeno {len(updates)} aktualizací")
+            self.btn_up_all.setEnabled(True)
+            self.btn_up_all.setText(f" Aktualizovat vše ({len(updates)})")
+        else: 
+            self.status_lbl.setText("Vše aktuální")
 
     def render_list(self, updates):
         self.list_widget.clear()
         for u in updates:
-            item = QListWidgetItem(self.list_widget); item.setSizeHint(QSize(0, 60))
+            item = QListWidgetItem(self.list_widget); item.setSizeHint(QSize(0, 55))
             self.list_widget.setItemWidget(item, UpdateRowWidget(u, self))
         if not updates:
             item = QListWidgetItem(self.list_widget); item.setSizeHint(QSize(0, 100))
             l = QLabel("Všechny aplikace jsou aktuální ✨"); l.setAlignment(Qt.AlignmentFlag.AlignCenter); l.setStyleSheet("color: #666; font-size: 14px;"); self.list_widget.setItemWidget(item, l)
+        self.update_selection_ui()
 
     def filter_updates(self, txt):
         f = [u for u in self.all_updates if txt.lower() in u['name'].lower()]
         self.render_list(f)
+
+    def update_selection_ui(self):
+        count = 0
+        for i in range(self.list_widget.count()):
+            widget = self.list_widget.itemWidget(self.list_widget.item(i))
+            if isinstance(widget, UpdateRowWidget) and widget.chk.isChecked():
+                count += 1
+                
+        if count > 0:
+            self.btn_up_sel.setText(f" Aktualizovat vybrané ({count})")
+            self.btn_up_sel.setEnabled(True)
+        else:
+            self.btn_up_sel.setText(" Aktualizovat vybrané")
+            self.btn_up_sel.setEnabled(False)
 
     def append_log(self, text):
         color = "#cccccc"
@@ -560,7 +776,7 @@ class UpdaterPage(QWidget):
 
     def show_console(self, title):
         self.con_title.setText(title.upper()); self.console_out.clear(); self.con_progress.show(); self.btn_cancel.show()
-        self.anim.stop(); self.anim.setStartValue(self.console_container.height()); self.anim.setEndValue(110); self.anim.start()
+        self.anim.stop(); self.anim.setStartValue(self.console_container.height()); self.anim.setEndValue(160); self.anim.start()
 
     def hide_console(self):
         self.anim.stop(); self.anim.setStartValue(self.console_container.height()); self.anim.setEndValue(0); self.anim.start()
@@ -578,11 +794,22 @@ class UpdaterPage(QWidget):
             QTimer.singleShot(3000, self.hide_console)
         self.cleanup_worker(worker)
 
-    def run_update(self, aid, name):
-        self.show_console(f"AKTUALIZACE: {name}"); self.append_log(f"Spouštím winget pro {name}...")
-        self.status_lbl.setText(f"Aktualizuji {name}...")
-        w = UpdateWorker(app_id=aid); self.active_workers.append(w); self.current_worker = w
+    def run_update(self, app_ids, name):
+        if not app_ids: return
+        self.show_console(f"AKTUALIZACE: {name}"); self.append_log(f"Připravuji aktualizaci pro: {name}...")
+        self.status_lbl.setText(f"Aktualizuji: {name}...")
+        w = UpdateWorker(app_ids=app_ids); self.active_workers.append(w); self.current_worker = w
         w.log_signal.connect(self.append_log); w.finished.connect(lambda: self.on_update_finished(w, name)); w.start()
+
+    def run_update_selected(self):
+        selected_ids = []
+        for i in range(self.list_widget.count()):
+            widget = self.list_widget.itemWidget(self.list_widget.item(i))
+            if isinstance(widget, UpdateRowWidget) and widget.chk.isChecked():
+                selected_ids.append(widget.data['id'])
+                
+        if not selected_ids: return
+        self.run_update(selected_ids, f"Vybrané aplikace ({len(selected_ids)})")
 
     def run_update_all(self):
         self.show_console("HROMADNÁ AKTUALIZACE"); self.append_log("Spouštím aktualizaci všech balíčků...")

@@ -4,7 +4,7 @@ import shutil
 import subprocess
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                              QProgressBar, QTextEdit, QPushButton, QWidget)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPoint
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QMouseEvent, QTextCursor
 
 from core.config import COLORS

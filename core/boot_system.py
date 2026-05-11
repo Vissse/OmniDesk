@@ -1,9 +1,6 @@
 import sys
 import os
-import shutil
 import tempfile
-import random
-import glob
 from pathlib import Path
 
 # Fixní název souboru, pokud by nějaký zbyl

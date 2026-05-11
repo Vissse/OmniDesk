@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QLineEdit, QCheckBox, QFrame,
                              QDialog, QTabWidget, QComboBox, QFileDialog, QDialogButtonBox,
                              QScrollArea, QGridLayout, QMessageBox)
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
+from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QUrl, QVariantAnimation, QRect
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QDesktopServices, QPainterPath
 
 from core.config import COLORS
 from core.config import resource_path
@@ -27,20 +27,146 @@ CATEGORY_ICONS = {
     "💻 Vývojářské nástroje": "assets/images/code-thin.png"
 }
 
+# --- ANIMOVANÉ TLAČÍTKO PRO HORNÍ LIŠTU (S MODRÝM PROUŽKEM) ---
+class AnimatedActionButton(QPushButton):
+    def __init__(self, text, icon_path, parent=None):
+        super().__init__(text, parent)
+        self.setFixedHeight(34)
+        self.icon_path = icon_path
+        
+        self._bg_color = QColor("transparent")
+        self._bar_height_factor = 0.0
+        
+        self.setStyleSheet(f"""
+            QPushButton {{ 
+                background: transparent; 
+                color: {COLORS['fg']}; 
+                border: none; 
+                padding: 0 15px; 
+                font-weight: bold; 
+                font-size: 10pt; 
+                text-align: left;
+            }}
+            QPushButton:disabled {{ 
+                color: {COLORS['sub_text']}; 
+            }}
+        """)
+        
+        self.anim = QVariantAnimation(self)
+        self.anim.setDuration(200)
+        self.anim.setStartValue(0.0)
+        self.anim.setEndValue(1.0)
+        self.anim.valueChanged.connect(self._animate_step)
+        
+        self.update_visual_state()
+
+    def get_colored_icon(self, color_hex):
+        full_path = resource_path(self.icon_path)
+        if not os.path.exists(full_path): return QIcon()
+        pixmap = QPixmap(full_path)
+        colored = QPixmap(pixmap.size())
+        colored.fill(Qt.GlobalColor.transparent)
+        p = QPainter(colored)
+        p.drawPixmap(0, 0, pixmap)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        p.fillRect(colored.rect(), QColor(color_hex))
+        p.end()
+        return QIcon(colored)
+
+    def setEnabled(self, enabled):
+        super().setEnabled(enabled)
+        self.update_visual_state()
+
+    def update_visual_state(self):
+        if self.isEnabled():
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            if self.icon_path:
+                self.setIcon(self.get_colored_icon(COLORS['fg']))
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            if self.icon_path:
+                self.setIcon(self.get_colored_icon(COLORS['sub_text']))
+            self.anim.stop()
+            self._bar_height_factor = 0.0
+            self._bg_color = QColor("transparent")
+        self.update()
+
+    def _animate_step(self, val):
+        self._bar_height_factor = val
+        target_bg = QColor(COLORS['item_hover'])
+        self._bg_color = QColor(target_bg.red(), target_bg.green(), target_bg.blue(), int(255 * val))
+        self.update()
+
+    def enterEvent(self, event):
+        if self.isEnabled():
+            self.anim.setDirection(QVariantAnimation.Direction.Forward)
+            self.anim.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if self.isEnabled():
+            self.anim.setDirection(QVariantAnimation.Direction.Backward)
+            self.anim.start()
+        else:
+            self._bar_height_factor = 0.0
+            self._bg_color = QColor("transparent")
+            self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect()
+        radius = 6
+
+        if self._bg_color.alpha() > 0:
+            p.setBrush(self._bg_color)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(rect, radius, radius)
+
+        if self._bar_height_factor > 0:
+            p.setBrush(QColor(COLORS['accent']))
+            p.setPen(Qt.PenStyle.NoPen)
+            h = rect.height() * self._bar_height_factor
+            y = rect.y() + (rect.height() - h) / 2
+            
+            path = QPainterPath()
+            path.addRoundedRect(rect.x(), rect.y(), rect.width(), rect.height(), radius, radius)
+            p.setClipPath(path)
+            p.drawRect(QRect(rect.x(), int(y), 4, int(h)))
+            p.setClipping(False)
+            
+        p.end()
+        super().paintEvent(event)
+
+
 class HoverButton(QPushButton):
-    def __init__(self, text, icon_path, style_template, parent=None):
+    def __init__(self, text, icon_path, style_template, parent=None, hover_style="accent"):
         super().__init__(text, parent)
         self.icon_path = resource_path(icon_path)
         self.style_template = style_template
+        self.hover_style = hover_style
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self._padding = "0px" if not text.strip() else "5px"
         self.set_colored_icon(False)
 
     def set_colored_icon(self, is_hover):
         if not os.path.exists(self.icon_path): return
         pixmap = QPixmap(self.icon_path)
-        current_color = QColor(COLORS['accent']) if is_hover else QColor(
-            COLORS['sub_text'] if "sub_text" in self.style_template else COLORS['fg']
-        )
+        
+        if is_hover:
+            current_color = QColor(COLORS.get(self.hover_style, COLORS['accent']))
+        else:
+            if "sub_text" in self.style_template:
+                current_color = QColor(COLORS['sub_text'])
+            elif "accent" in self.style_template:
+                current_color = QColor(COLORS['accent'])
+            elif "danger" in self.style_template:
+                current_color = QColor(COLORS['danger'])
+            else:
+                current_color = QColor(COLORS['fg'])
+                
         colored_pixmap = QPixmap(pixmap.size())
         colored_pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(colored_pixmap)
@@ -50,7 +176,7 @@ class HoverButton(QPushButton):
         painter.end()
 
         self.setIcon(QIcon(colored_pixmap))
-        self.setStyleSheet(f"QPushButton {{ background: transparent; border: none; outline: none; color: {current_color.name()}; font-weight: bold; font-size: 10pt; padding: 5px; text-align: left; }}")
+        self.setStyleSheet(f"QPushButton {{ background: transparent; border: none; outline: none; color: {current_color.name()}; font-weight: bold; font-size: 10pt; padding: {self._padding}; text-align: left; }}")
 
     def enterEvent(self, event):
         self.set_colored_icon(True)
@@ -59,6 +185,93 @@ class HoverButton(QPushButton):
     def leaveEvent(self, event):
         self.set_colored_icon(False)
         super().leaveEvent(event)
+
+
+# --- KULATÉ TLAČÍTKO PRO PŘIDÁNÍ/ODEBRÁNÍ Z FRONTY (IKONY PLUS/MINUS) ---
+class QueueToggleButton(QPushButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(32, 32)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._hover = False
+        self.is_queued = False
+        
+        self.icon_plus = resource_path("assets/images/plus.png")
+        if not os.path.exists(self.icon_plus):
+            self.icon_plus = resource_path("assets/images/plus-thin.png")
+            
+        self.icon_minus = resource_path("assets/images/minus.png")
+        if not os.path.exists(self.icon_minus):
+            self.icon_minus = resource_path("assets/images/minus-thin.png")
+
+    def set_queued(self, state):
+        self.is_queued = state
+        self.setToolTip("Odebrat z fronty" if state else "Přidat do fronty")
+        self.update()
+
+    def enterEvent(self, event):
+        self._hover = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hover = False
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect().adjusted(2, 2, -2, -2) 
+        
+        if self.is_queued:
+            danger_color = QColor(COLORS.get('danger', '#ff4444'))
+            
+            if self._hover:
+                bg_color = danger_color
+                border_color = danger_color
+                icon_color = QColor("white")
+            else:
+                bg_color = QColor("transparent")
+                border_color = danger_color
+                icon_color = danger_color
+            current_icon = self.icon_minus
+        else:
+            if self._hover:
+                bg_color = QColor(COLORS.get('accent', '#0078d4'))
+                border_color = bg_color
+            else:
+                bg_color = QColor(COLORS.get('item_bg', '#3e3e42'))
+                border_color = QColor("transparent")
+            icon_color = QColor("white")
+            current_icon = self.icon_plus
+            
+        if bg_color.alpha() > 0:
+            p.setBrush(bg_color)
+        else:
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            
+        if border_color.alpha() > 0 and border_color != QColor("transparent"):
+            p.setPen(border_color)
+        else:
+            p.setPen(Qt.PenStyle.NoPen)
+            
+        p.drawEllipse(rect)
+        
+        if os.path.exists(current_icon):
+            pix = QPixmap(current_icon).scaled(14, 14, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            colored_pix = QPixmap(pix.size())
+            colored_pix.fill(Qt.GlobalColor.transparent)
+            
+            cp = QPainter(colored_pix)
+            cp.drawPixmap(0, 0, pix)
+            cp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            cp.fillRect(colored_pix.rect(), icon_color)
+            cp.end()
+            
+            x = (self.width() - 14) // 2
+            y = (self.height() - 14) // 2
+            p.drawPixmap(x, y, colored_pix)
 
 
 # --- DIALOG NASTAVENÍ ---
@@ -133,24 +346,132 @@ class InstallationOptionsDialog(QDialog):
         return { "admin": self.chk_admin.isChecked(), "interactive": self.chk_interactive.isChecked(), "hash": self.chk_hash.isChecked(), "version": self.combo_version.currentText(), "arch": self.combo_arch.currentText(), "scope": self.combo_scope.currentText(), "path": self.path_edit.text() }
 
 
-# --- WIDGET PRO KATALOG ---
+# --- SPODNÍ INFORMAČNÍ PANEL (VYSOUVACÍ PROFI STYL) ---
+class AppDetailPanel(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(0) 
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {COLORS['bg_sidebar']};
+                border-top: 1px solid {COLORS['border']};
+            }}
+            QLabel {{ border: none; background: transparent; }}
+        """)
+        
+        self.layout = QHBoxLayout(self)
+        self.layout.setContentsMargins(30, 20, 20, 20)
+        self.layout.setSpacing(25)
+
+        self.lbl_icon = QLabel()
+        self.lbl_icon.setFixedSize(100, 100)
+        self.lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.layout.addWidget(self.lbl_icon, 0, Qt.AlignmentFlag.AlignTop)
+
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(5)
+        text_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        title_id_layout = QHBoxLayout()
+        title_id_layout.setSpacing(10)
+        
+        self.lbl_title = QLabel("Název")
+        self.lbl_title.setStyleSheet(f"font-weight: bold; font-size: 18px; color: {COLORS['fg']};")
+        
+        self.lbl_id = QLabel("ID")
+        self.lbl_id.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 12px; font-family: Consolas, monospace;")
+        
+        self.current_url = ""
+        self.btn_web = HoverButton("", "assets/images/globe-thin.png", "accent", hover_style="accent_hover")
+        self.btn_web.setFixedSize(24, 24)
+        self.btn_web.setIconSize(QSize(20, 20))
+        self.btn_web.setToolTip("Otevřít webové stránky")
+        self.btn_web.clicked.connect(self.open_website)
+        
+        title_id_layout.addWidget(self.lbl_title)
+        title_id_layout.addWidget(self.lbl_id)
+        title_id_layout.addWidget(self.btn_web) 
+        title_id_layout.addStretch()
+        
+        text_layout.addLayout(title_id_layout)
+
+        scroll_desc = QScrollArea()
+        scroll_desc.setWidgetResizable(True)
+        scroll_desc.setStyleSheet(f"""
+            QScrollArea {{ border: none; background: transparent; }}
+            QScrollBar:vertical {{ border: none; background: transparent; width: 4px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background: #555555; border-radius: 2px; min-height: 20px; }}
+            QScrollBar::handle:vertical:hover {{ background: {COLORS.get('accent', '#0078d4')}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; border: none; background: transparent; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; border: none; }}
+        """)
+        desc_container = QWidget()
+        desc_container.setStyleSheet("background: transparent;")
+        desc_layout = QVBoxLayout(desc_container)
+        desc_layout.setContentsMargins(0, 5, 20, 0)
+        
+        self.lbl_desc = QLabel("Zde se zobrazí popis aplikace.")
+        self.lbl_desc.setWordWrap(True)
+        self.lbl_desc.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.lbl_desc.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 13px; line-height: 1.4;")
+        
+        desc_layout.addWidget(self.lbl_desc)
+        desc_layout.addStretch()
+        scroll_desc.setWidget(desc_container)
+        
+        text_layout.addWidget(scroll_desc, stretch=1)
+        self.layout.addLayout(text_layout, stretch=1)
+
+        right_layout = QVBoxLayout()
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        self.btn_close = HoverButton("", "assets/images/x-thin.png", "sub_text", hover_style="danger")
+        self.btn_close.setFixedSize(24, 24)
+        self.btn_close.setIconSize(QSize(20, 20))
+        self.btn_close.setToolTip("Zavřít panel")
+        
+        right_layout.addWidget(self.btn_close, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+        right_layout.addStretch()
+        
+        self.layout.addLayout(right_layout)
+
+    def update_data(self, data):
+        self.lbl_title.setText(data.get('name', 'Neznámá aplikace'))
+        self.lbl_id.setText(data.get('id', 'Neznámé ID'))
+        self.lbl_desc.setText(data.get('description', 'Tato aplikace zatím nemá k dispozici podrobný popis.'))
+
+        icon_path = data.get('icon_url')
+        if icon_path and os.path.exists(icon_path):
+            pix = QPixmap(icon_path).scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.lbl_icon.setPixmap(pix)
+        else:
+            self.lbl_icon.setText("📦")
+            self.lbl_icon.setStyleSheet("font-size: 64px; color: #555; background: transparent;")
+
+        website = data.get('website', '')
+        self.current_url = website
+        if website:
+            self.btn_web.show()
+        else:
+            self.btn_web.hide()
+
+    def open_website(self):
+        if self.current_url:
+            QDesktopServices.openUrl(QUrl(self.current_url))
+
+# --- WIDGET PRO KATALOG S HOVER ANIMACÍ VE STYLU "HEALTH" ---
 class CompactAppWidget(QWidget):
     def __init__(self, data, parent_controller):
         super().__init__()
         self.data = data
         self.controller = parent_controller
         self.setFixedHeight(48)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        self.setStyleSheet(f"""
-            QWidget#AppContainer {{
-                background-color: transparent;
-                border-radius: 8px;
-            }}
-            QWidget#AppContainer:hover {{
-                background-color: {COLORS.get('item_hover', '#2d2d30')};
-            }}
-        """)
         self.setObjectName("AppContainer")
+        self.setStyleSheet("background: transparent;")
+        
+        self._bg_color = QColor("transparent")
+        self._bar_height_factor = 0.0
         
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 5, 10, 5)
@@ -173,51 +494,70 @@ class CompactAppWidget(QWidget):
         name_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: white; background: transparent;")
         layout.addWidget(name_lbl, stretch=1)
         
-        self.btn_pick = QPushButton()
-        self.btn_pick.setFixedSize(85, 28)
-        self.btn_pick.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_pick = QueueToggleButton()
         self.btn_pick.clicked.connect(self.toggle_queue)
         layout.addWidget(self.btn_pick)
 
         self.is_queued = self.data['id'] in self.controller.queue_page.queue_data
-        self.update_button_style()
+        self.btn_pick.set_queued(self.is_queued)
 
-    def update_button_style(self):
-        if self.is_queued:
-            self.btn_pick.setText("Zrušit")
-            self.btn_pick.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: transparent;
-                    color: {COLORS.get('accent', '#0078d4')};
-                    border: 1px solid {COLORS.get('accent', '#0078d4')};
-                    border-radius: 14px;
-                    font-weight: bold;
-                    font-size: 12px;
-                }}
-                QPushButton:hover {{
-                    background-color: {COLORS.get('accent', '#0078d4')};
-                    color: white;
-                }}
-            """)
-        else:
-            self.btn_pick.setText("Přidat")
-            self.btn_pick.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {COLORS.get('item_bg', '#3e3e42')};
-                    color: white;
-                    border: none;
-                    border-radius: 14px;
-                    font-weight: bold;
-                    font-size: 12px;
-                }}
-                QPushButton:hover {{
-                    background-color: {COLORS.get('accent', '#0078d4')};
-                }}
-            """)
+        self.anim = QVariantAnimation(self)
+        self.anim.setDuration(200)
+        self.anim.setStartValue(0.0)
+        self.anim.setEndValue(1.0)
+        self.anim.valueChanged.connect(self._animate_step)
+
+    def _animate_step(self, val):
+        self._bar_height_factor = val
+        target_bg = QColor(COLORS.get('item_hover', '#2d2d30'))
+        self._bg_color = QColor(target_bg.red(), target_bg.green(), target_bg.blue(), int(255 * val))
+        self.update()
+
+    def enterEvent(self, event):
+        self.anim.setDirection(QVariantAnimation.Direction.Forward)
+        self.anim.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.anim.setDirection(QVariantAnimation.Direction.Backward)
+        self.anim.start()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.controller.show_app_details(self.data)
+        super().mousePressEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect()
+        radius = 8 
+        
+        if self._bg_color.alpha() > 0:
+            p.setBrush(self._bg_color)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(rect, radius, radius)
+            
+        if self._bar_height_factor > 0:
+            p.setBrush(QColor(COLORS.get('accent', '#0078d4')))
+            p.setPen(Qt.PenStyle.NoPen)
+            
+            h = rect.height() * self._bar_height_factor
+            y = rect.y() + (rect.height() - h) / 2
+            
+            from PyQt6.QtGui import QPainterPath
+            from PyQt6.QtCore import QRect
+            path = QPainterPath()
+            path.addRoundedRect(rect.x(), rect.y(), rect.width(), rect.height(), radius, radius)
+            p.setClipPath(path)
+            
+            p.drawRect(QRect(rect.x(), int(y), 4, int(h)))
+            p.setClipping(False)
 
     def toggle_queue(self):
         self.is_queued = not self.is_queued
-        self.update_button_style()
+        self.btn_pick.set_queued(self.is_queued)
         
         if self.is_queued:
             self.controller.queue_page.add_to_queue(self.data, icon=self.icon_lbl.pixmap())
@@ -227,7 +567,8 @@ class CompactAppWidget(QWidget):
     def set_checked_state(self, is_checked):
         if self.is_queued != is_checked:
             self.is_queued = is_checked
-            self.update_button_style()
+            self.btn_pick.set_queued(self.is_queued)
+
 
 # --- HLAVNÍ UI (InstallerPage) ---
 class InstallerPage(QWidget):
@@ -268,37 +609,21 @@ class InstallerPage(QWidget):
         top_layout.addWidget(self.search_container); top_layout.addStretch()
         main_layout.addWidget(top_bar)
 
-        # B. ACTION BAR
+        # B. ACTION BAR S NOVÝMI TLAČÍTKY (Animované jako v Health/Updateru)
         action_bar = QWidget()
         action_bar.setStyleSheet(f"background-color: {COLORS['bg_main']};")
         action_layout = QHBoxLayout(action_bar)
         action_layout.setContentsMargins(20, 10, 20, 10); action_layout.setSpacing(10)
 
-        split_container = QFrame()
-        split_container.setFixedHeight(34)
-        split_container.setStyleSheet(f"QFrame {{ background-color: {COLORS['item_bg']}; border: 1px solid {COLORS['border']}; border-radius: 6px; }} QFrame:hover {{ border-color: {COLORS['accent']}; }}")
-        split_layout = QHBoxLayout(split_container)
-        split_layout.setContentsMargins(0, 0, 0, 0); split_layout.setSpacing(0)
-
-        self.btn_install_selection = QPushButton("  Nainstalovat vybrané")
-        self.btn_install_selection.setIcon(QIcon(resource_path("assets/images/download-simple-thin.png")))
-        self.btn_install_selection.setFixedHeight(32)
-        self.btn_install_selection.setStyleSheet(f"QPushButton {{ background: transparent; border: none; color: white; padding: 0 15px; font-weight: bold; font-size: 10pt; border-top-left-radius: 5px; border-bottom-left-radius: 5px; border-top-right-radius: 0px; border-bottom-right-radius: 0px; }} QPushButton:hover {{ background-color: {COLORS['item_hover']}; }}")
+        self.btn_install_selection = AnimatedActionButton(" Nainstalovat vybrané", "assets/images/download-simple-thin.png")
         self.btn_install_selection.clicked.connect(self.run_install_from_bar)
+        action_layout.addWidget(self.btn_install_selection)
 
-        mid_line = QFrame(); mid_line.setFixedWidth(1); mid_line.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
+        self.add_separator(action_layout)
 
-        self.btn_settings_quick = QPushButton()
-        self.btn_settings_quick.setFixedSize(32, 32)
-        self.btn_settings_quick.setIcon(self.get_colored_icon_for_split("assets/images/gear-six-thin.png", COLORS['fg']))
-        self.btn_settings_quick.setIconSize(QSize(18, 18))
-        self.btn_settings_quick.setStyleSheet(f"QPushButton {{ background: transparent; border: none; border-top-right-radius: 5px; border-bottom-right-radius: 5px; border-top-left-radius: 0px; border-bottom-left-radius: 0px; }} QPushButton:hover {{ background-color: {COLORS['item_hover']}; }}")
+        self.btn_settings_quick = AnimatedActionButton(" Nastavení instalace", "assets/images/gear-six-thin.png")
         self.btn_settings_quick.clicked.connect(self.open_options_dialog)
-
-        split_layout.addWidget(self.btn_install_selection)
-        split_layout.addWidget(mid_line)
-        split_layout.addWidget(self.btn_settings_quick)
-        action_layout.addWidget(split_container)
+        action_layout.addWidget(self.btn_settings_quick)
         
         action_layout.addStretch()
 
@@ -307,6 +632,17 @@ class InstallerPage(QWidget):
         action_layout.addWidget(self.btn_help)
         
         main_layout.addWidget(action_bar)
+
+        h_sep = QFrame()
+        h_sep.setFrameShape(QFrame.Shape.HLine)
+        h_sep.setFixedHeight(1)
+        h_sep.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
+        main_layout.addWidget(h_sep)
+
+        # ROZDĚLENÝ LAYOUT PRO KATALOG A DETAIL PANEL (Vertikální pro spodní vyjíždění)
+        self.split_layout = QVBoxLayout()
+        self.split_layout.setContentsMargins(0, 0, 0, 0)
+        self.split_layout.setSpacing(0)
 
         # C. KATALOG (ScrollArea)
         self.catalog_widget = QWidget()
@@ -393,7 +729,7 @@ class InstallerPage(QWidget):
                     'header': header_container, 
                     'separator': separator, 
                     'widgets': cat_widgets,
-                    'grid': grid,             
+                    'grid': grid,              
                     'dummies': cat_dummies    
                 })
         else:
@@ -404,8 +740,54 @@ class InstallerPage(QWidget):
         c_layout.addStretch()
         catalog_scroll.setWidget(catalog_content)
         catalog_layout.addWidget(catalog_scroll)
-        
-        main_layout.addWidget(self.catalog_widget)
+
+        self.split_layout.addWidget(self.catalog_widget, stretch=1)
+
+        # D. BOČNÍ DETAIL PANEL (Vysouvá zespodu)
+        self.detail_panel = AppDetailPanel(self)
+        self.detail_panel.btn_close.clicked.connect(self.hide_app_details)
+        self.split_layout.addWidget(self.detail_panel)
+
+        main_layout.addLayout(self.split_layout, stretch=1)
+
+        # E. NASTAVENÍ ANIMACÍ PRO VYSOUVACÍ PANEL
+        self.panel_anim_group = QParallelAnimationGroup()
+        self.anim_min = QPropertyAnimation(self.detail_panel, b"minimumHeight")
+        self.anim_max = QPropertyAnimation(self.detail_panel, b"maximumHeight")
+        self.anim_min.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.anim_max.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.panel_anim_group.addAnimation(self.anim_min)
+        self.panel_anim_group.addAnimation(self.anim_max)
+
+    def add_separator(self, layout):
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFixedWidth(1)
+        sep.setFixedHeight(18)
+        sep.setStyleSheet(f"background: {COLORS['border']}; border: none;")
+        layout.addWidget(sep)
+
+    # --- LOGIKA DETAIL PANELU ---
+    def show_app_details(self, data):
+        self.detail_panel.update_data(data)
+        if self.detail_panel.maximumHeight() == 0:
+            self.anim_min.setDuration(350)
+            self.anim_max.setDuration(350)
+            self.anim_min.setStartValue(0)
+            self.anim_min.setEndValue(160)
+            self.anim_max.setStartValue(0)
+            self.anim_max.setEndValue(160)
+            self.panel_anim_group.start()
+
+    def hide_app_details(self):
+        self.anim_min.setDuration(350)
+        self.anim_max.setDuration(350)
+        self.anim_min.setStartValue(160)
+        self.anim_min.setEndValue(0)
+        self.anim_max.setStartValue(160)
+        self.anim_max.setEndValue(0)
+        self.panel_anim_group.start()
+
 
     # --- POMOCNÉ FUNKCE ---
     def filter_catalog(self):
@@ -413,7 +795,6 @@ class InstallerPage(QWidget):
         for cat in self.categories_ui:
             grid = cat['grid']
             
-            # Zjištění, které aplikace mají být po vyhledání vidět
             visible_widgets = []
             for w in cat['widgets']:
                 if query in w.data['name'].lower() or query in w.data['id'].lower():
@@ -422,13 +803,11 @@ class InstallerPage(QWidget):
                 else:
                     w.hide()
             
-            # Skrytí všech aktuálních výplňových "dummy" widgetů, aby nám nedělaly neplechu
             for d in cat['dummies']:
                 d.hide()
                 
             num_apps = len(visible_widgets)
             
-            # Pokud po vyfiltrování něco zbylo, přeskládáme to do mřížky odznova (reflow)
             if num_apps > 0:
                 num_rows = (num_apps + 1) // 2 
                 
@@ -437,7 +816,6 @@ class InstallerPage(QWidget):
                     row = idx % num_rows
                     grid.addWidget(w, row, col)
                 
-                # Výpočet, zda nám chybí položka do páru (abychom neroztahovali poslední appku)
                 total_cells = num_rows * 2
                 dummy_needed = total_cells - num_apps
                 
@@ -448,7 +826,6 @@ class InstallerPage(QWidget):
                     d.show()
                     grid.addWidget(d, num_rows - 1, 1)
 
-            # Skrytí celého nadpisu a čáry, pokud v kategorii nic nevyhovuje vyhledávání
             if num_apps == 0:
                 cat['header'].hide()
                 cat['separator'].hide()
@@ -460,14 +837,6 @@ class InstallerPage(QWidget):
         for widget in self.catalog_widgets: widget.set_checked_state(widget.data['id'] in self.queue_page.queue_data)
             
     def refresh_checkboxes(self): self.refresh_catalog_checkboxes()
-
-    def get_colored_icon_for_split(self, path, color_hex):
-        full_path = resource_path(path)
-        if not os.path.exists(full_path): return QIcon()
-        pixmap = QPixmap(full_path)
-        colored = QPixmap(pixmap.size()); colored.fill(Qt.GlobalColor.transparent)
-        p = QPainter(colored); p.drawPixmap(0, 0, pixmap); p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn); p.fillRect(colored.rect(), QColor(color_hex)); p.end()
-        return QIcon(colored)
 
     def run_install_from_bar(self):
         if not self.queue_page.queue_data:
