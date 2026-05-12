@@ -1,7 +1,5 @@
 import subprocess
 import os
-import winreg
-import requests
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QListWidget, QListWidgetItem, QLineEdit, 
                              QMessageBox, QFileIconProvider, QFrame, QProgressBar,
@@ -11,234 +9,9 @@ from PyQt6.QtGui import QPixmap, QImage, QIcon, QPainter, QColor, QPainterPath
 
 from core.workers import WingetListWorker
 from core.config import COLORS, resource_path
+from core.utils import find_app_icon_path, find_main_exe_in_folder
+from UI.shared_widgets import AnimatedActionButton, IconDownloadWorker, add_vertical_separator
 
-# --- ANIMOVANÉ TLAČÍTKO PRO HORNÍ LIŠTU (S MODRÝM PROUŽKEM) ---
-class AnimatedActionButton(QPushButton):
-    def __init__(self, text, icon_path, parent=None):
-        super().__init__(text, parent)
-        self.setFixedHeight(34)
-        self.icon_path = icon_path
-        
-        self._bg_color = QColor("transparent")
-        self._bar_height_factor = 0.0
-        
-        self.setStyleSheet(f"""
-            QPushButton {{ 
-                background: transparent; 
-                color: {COLORS['fg']}; 
-                border: none; 
-                padding: 0 15px; 
-                font-weight: bold; 
-                font-size: 10pt; 
-                text-align: left;
-            }}
-            QPushButton:disabled {{ 
-                color: {COLORS['sub_text']}; 
-            }}
-        """)
-        
-        self.anim = QVariantAnimation(self)
-        self.anim.setDuration(200)
-        self.anim.setStartValue(0.0)
-        self.anim.setEndValue(1.0)
-        self.anim.valueChanged.connect(self._animate_step)
-        
-        self.update_visual_state()
-
-    def get_colored_icon(self, color_hex):
-        full_path = resource_path(self.icon_path)
-        if not os.path.exists(full_path): return QIcon()
-        pixmap = QPixmap(full_path)
-        colored = QPixmap(pixmap.size())
-        colored.fill(Qt.GlobalColor.transparent)
-        p = QPainter(colored)
-        p.drawPixmap(0, 0, pixmap)
-        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-        p.fillRect(colored.rect(), QColor(color_hex))
-        p.end()
-        return QIcon(colored)
-
-    def setEnabled(self, enabled):
-        super().setEnabled(enabled)
-        self.update_visual_state()
-
-    def update_visual_state(self):
-        if self.isEnabled():
-            self.setCursor(Qt.CursorShape.PointingHandCursor)
-            if self.icon_path:
-                self.setIcon(self.get_colored_icon(COLORS['fg']))
-        else:
-            self.setCursor(Qt.CursorShape.ArrowCursor)
-            if self.icon_path:
-                self.setIcon(self.get_colored_icon(COLORS['sub_text']))
-            self.anim.stop()
-            self._bar_height_factor = 0.0
-            self._bg_color = QColor("transparent")
-        self.update()
-
-    def _animate_step(self, val):
-        self._bar_height_factor = val
-        target_bg = QColor(COLORS['item_hover'])
-        self._bg_color = QColor(target_bg.red(), target_bg.green(), target_bg.blue(), int(255 * val))
-        self.update()
-
-    def enterEvent(self, event):
-        if self.isEnabled():
-            self.anim.setDirection(QVariantAnimation.Direction.Forward)
-            self.anim.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        if self.isEnabled():
-            self.anim.setDirection(QVariantAnimation.Direction.Backward)
-            self.anim.start()
-        else:
-            self._bar_height_factor = 0.0
-            self._bg_color = QColor("transparent")
-            self.update()
-        super().leaveEvent(event)
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = self.rect()
-        radius = 6
-
-        if self._bg_color.alpha() > 0:
-            p.setBrush(self._bg_color)
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawRoundedRect(rect, radius, radius)
-
-        if self._bar_height_factor > 0:
-            # Ponechána modrá barva (accent) dle zadání "stejně jako zbytek tlačítek"
-            p.setBrush(QColor(COLORS['accent'])) 
-            p.setPen(Qt.PenStyle.NoPen)
-            h = rect.height() * self._bar_height_factor
-            y = rect.y() + (rect.height() - h) / 2
-            
-            path = QPainterPath()
-            path.addRoundedRect(rect.x(), rect.y(), rect.width(), rect.height(), radius, radius)
-            p.setClipPath(path)
-            p.drawRect(QRect(rect.x(), int(y), 4, int(h)))
-            p.setClipping(False)
-            
-        p.end()
-        super().paintEvent(event)
-
-
-# --- WORKER PRO STAHOVÁNÍ IKON ---
-class IconDownloadWorker(QThread):
-    loaded = pyqtSignal(QPixmap)
-
-    def __init__(self, app_id):
-        super().__init__()
-        self.app_id = app_id
-
-    def run(self):
-        if not self.app_id: return
-        clean_id = self.app_id
-        lower_id = self.app_id.lower()
-        dashed_id = lower_id.replace(".", "-")
-        urls = [
-            f"https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/{dashed_id}.png",
-            f"https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/{lower_id}.png",
-            f"https://raw.githubusercontent.com/marticliment/UnigetUI/main/src/UnigetUI.PackageEngine/Assets/Packages/{clean_id}.png",
-            f"https://raw.githubusercontent.com/marticliment/UnigetUI/main/src/UnigetUI.PackageEngine/Assets/Packages/{lower_id}.png"
-        ]
-        session = requests.Session()
-        session.headers.update({'User-Agent': 'Mozilla/5.0'})
-        for url in urls:
-            try:
-                response = session.get(url, timeout=1.5, stream=True)
-                if response.status_code == 200:
-                    data = response.content
-                    if len(data) > 50:
-                        image = QImage(); image.loadFromData(data)
-                        if not image.isNull():
-                            pixmap = QPixmap.fromImage(image)
-                            self.loaded.emit(pixmap); return
-            except: pass
-
-# --- VYLEPŠENÉ HLEDÁNÍ IKON V SYSTÉMU ---
-def find_app_icon_path(app_name, app_id=None):
-    clean_name = app_name.split(' (')[0].strip()
-    search_names = [clean_name.lower()]
-    if app_id and "." in app_id:
-        publisher = app_id.split('.')[0].lower()
-        if len(publisher) > 2: search_names.append(publisher)
-
-    registry_paths = [
-        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
-        r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
-    ]
-    roots = [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]
-    found_install_loc = None
-
-    for i, reg_path in enumerate(registry_paths):
-        root = roots[i]
-        try:
-            with winreg.OpenKey(root, reg_path) as key:
-                for j in range(winreg.QueryInfoKey(key)[0]):
-                    try:
-                        subkey_name = winreg.EnumKey(key, j)
-                        with winreg.OpenKey(key, subkey_name) as subkey:
-                            try:
-                                display_name = winreg.QueryValueEx(subkey, "DisplayName")[0].lower()
-                                if any(s in display_name for s in search_names):
-                                    try:
-                                        display_icon = winreg.QueryValueEx(subkey, "DisplayIcon")[0]
-                                        display_icon = display_icon.split(',')[0].strip('"')
-                                        if os.path.exists(display_icon) and (display_icon.endswith('.exe') or display_icon.endswith('.ico')):
-                                            return display_icon
-                                    except: pass
-                                    try:
-                                        loc = winreg.QueryValueEx(subkey, "InstallLocation")[0].strip('"')
-                                        if loc and os.path.exists(loc): found_install_loc = loc
-                                    except: pass
-                            except: continue
-                    except: continue
-        except: continue
-
-    if found_install_loc:
-        exe = find_main_exe_in_folder(found_install_loc)
-        if exe: return exe
-
-    try:
-        app_paths_key = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"
-        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, app_paths_key) as key:
-            for j in range(winreg.QueryInfoKey(key)[0]):
-                exe_name = winreg.EnumKey(key, j)
-                if clean_name.replace(" ", "").lower() in exe_name.lower():
-                    with winreg.OpenKey(key, exe_name) as subkey:
-                        try:
-                            path = winreg.QueryValue(subkey, None).strip('"')
-                            if os.path.exists(path): return path
-                        except: pass
-    except: pass
-    return None
-
-def find_main_exe_in_folder(folder):
-    best_exe = None; max_size = 0
-    base_depth = folder.rstrip(os.sep).count(os.sep)
-    try:
-        for root, dirs, files in os.walk(folder):
-            current_depth = root.rstrip(os.sep).count(os.sep)
-            if current_depth - base_depth > 1: continue 
-            for file in files:
-                if file.lower().endswith(".exe"):
-                    if any(x in file.lower() for x in ["unins", "helper", "crash", "update", "report", "setup"]): continue
-                    full_path = os.path.join(root, file)
-                    try:
-                        size = os.path.getsize(full_path)
-                        if "java.exe" in file.lower() or "javaw.exe" in file.lower(): return full_path
-                        if size > max_size: max_size = size; best_exe = full_path
-                    except: pass
-    except: pass
-    return best_exe
-
-
-# --- ASYNCHRONNÍ WORKER PRO ODINSTALACI ---
 class UninstallWorker(QThread):
     finished = pyqtSignal()
     log_signal = pyqtSignal(str)
@@ -292,8 +65,6 @@ class UninstallWorker(QThread):
             try: self.process.kill() 
             except: pass
 
-
-# --- WIDGET ŘÁDKU S APLIKACÍ ---
 class AppItemWidget(QWidget):
     def __init__(self, data, parent_page):
         super().__init__()
@@ -311,7 +82,6 @@ class AppItemWidget(QWidget):
         layout.setSpacing(15)
         layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
-        # 1. Checkbox (modrý)
         self.chk = QCheckBox()
         self.chk.setFixedWidth(24)
         self.chk.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -322,7 +92,6 @@ class AppItemWidget(QWidget):
         self.chk.stateChanged.connect(self.parent_page.update_selection_ui)
         layout.addWidget(self.chk)
 
-        # 2. Ikona
         self.icon_lbl = QLabel()
         self.icon_lbl.setFixedSize(28, 28)
         
@@ -338,7 +107,6 @@ class AppItemWidget(QWidget):
         
         layout.addWidget(self.icon_lbl)
 
-        # 3. Texty vedle sebe 
         text_layout = QHBoxLayout()
         text_layout.setSpacing(15)
         text_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -355,7 +123,6 @@ class AppItemWidget(QWidget):
         
         layout.addLayout(text_layout, stretch=1)
 
-        # Animace
         self.anim = QVariantAnimation(self)
         self.anim.setDuration(200)
         self.anim.setStartValue(0.0)
@@ -444,8 +211,6 @@ class AppItemWidget(QWidget):
         scaled = pixmap.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         self.icon_lbl.setPixmap(scaled); self.icon_lbl.setText("")
 
-
-# --- 4. HLAVNÍ STRÁNKA (UninstallerPage) ---
 class UninstallerPage(QWidget):
     def __init__(self):
         super().__init__()
@@ -456,7 +221,6 @@ class UninstallerPage(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0); main_layout.setSpacing(0)
 
-        # A. HORNÍ LIŠTA S VYPRACOVANÝM HLEDÁNÍM
         top_bar = QWidget()
         top_bar.setStyleSheet(f"background-color: {COLORS['bg_main']}; border-bottom: 1px solid {COLORS['border']};")
         top_layout = QHBoxLayout(top_bar)
@@ -503,7 +267,6 @@ class UninstallerPage(QWidget):
         top_layout.addStretch()
         main_layout.addWidget(top_bar)
 
-        # B. PROGRESS BAR
         self.progress = QProgressBar()
         self.progress.setFixedHeight(2)
         self.progress.setTextVisible(False)
@@ -511,7 +274,6 @@ class UninstallerPage(QWidget):
         self.progress.hide()
         main_layout.addWidget(self.progress)
 
-        # C. ACTION BAR (Sjednocený layout s Updaterem)
         act_bar = QWidget()
         act_bar.setStyleSheet(f"background-color: {COLORS['bg_main']};")
         action_layout = QHBoxLayout(act_bar)
@@ -522,7 +284,7 @@ class UninstallerPage(QWidget):
         self.refresh_btn.clicked.connect(self.load_apps)
         action_layout.addWidget(self.refresh_btn)
 
-        self.add_separator(action_layout)
+        add_vertical_separator(action_layout)
 
         self.btn_un_sel = AnimatedActionButton(" Odinstalovat vybrané", "assets/images/trash-thin.png")
         self.btn_un_sel.setEnabled(False)
@@ -535,14 +297,12 @@ class UninstallerPage(QWidget):
         action_layout.addWidget(self.status)
         main_layout.addWidget(act_bar)
 
-        # VODOROVNÁ ČÁRA PŘES CELOU ŠÍŘKU
         h_sep = QFrame()
         h_sep.setFrameShape(QFrame.Shape.HLine)
         h_sep.setFixedHeight(1)
         h_sep.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
         main_layout.addWidget(h_sep)
 
-        # D. SEZNAM BEZ HLAVIČKY
         self.list_widget = QListWidget()
         self.list_widget.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
         self.list_widget.setStyleSheet(f"""
@@ -557,7 +317,6 @@ class UninstallerPage(QWidget):
         """)
         main_layout.addWidget(self.list_widget)
 
-        # E. KONZOLE 
         self.console_container = QFrame()
         self.console_container.setMaximumHeight(0)
         self.console_container.setStyleSheet(f"QFrame {{ background-color: {COLORS['bg_sidebar']}; border-top-left-radius: 12px; border-top-right-radius: 12px; border-top: 1px solid #333; }}")
@@ -566,7 +325,6 @@ class UninstallerPage(QWidget):
         hl = QHBoxLayout(); self.con_title = QLabel("PRŮBĚH ODINSTALACE")
         self.con_title.setStyleSheet(f"color: white; font-weight: bold; font-size: 11px; letter-spacing: 0.5px; background: transparent;")
         
-        # Modernizované tlačítko Zrušit (ghost red button)
         self.btn_cancel = QPushButton("Zrušit"); self.btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_cancel.clicked.connect(self.cancel_current_process)
         self.btn_cancel.setStyleSheet(f"""
@@ -610,14 +368,6 @@ class UninstallerPage(QWidget):
         main_layout.addWidget(self.console_container)
         self.anim = QPropertyAnimation(self.console_container, b"maximumHeight"); self.anim.setDuration(400); self.anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-    def add_separator(self, layout):
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setFixedWidth(1)
-        sep.setFixedHeight(18)
-        sep.setStyleSheet(f"background: {COLORS['border']}; border: none;")
-        layout.addWidget(sep)
-
     def load_apps(self):
         self.list_widget.clear(); self.all_items = []
         self.refresh_btn.setEnabled(False)
@@ -660,7 +410,6 @@ class UninstallerPage(QWidget):
             self.btn_un_sel.setText(" Odinstalovat vybrané")
             self.btn_un_sel.setEnabled(False)
 
-    # --- KONZOLOVÁ LOGIKA ---
     def append_log(self, text):
         color = "#cccccc"
         if "Chyba" in text or "Fail" in text or "error" in text.lower(): color = "#ff5555"

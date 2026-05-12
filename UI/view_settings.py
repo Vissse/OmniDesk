@@ -1,13 +1,16 @@
 import webbrowser
 import os
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QPushButton, QComboBox, QFrame, QMessageBox, 
+                             QPushButton, QFrame, QMessageBox, 
                              QScrollArea, QCheckBox, QFileDialog)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QMouseEvent, QCursor
 
 from core.config import COLORS, THEMES
 from core.settings_manager import SettingsManager
+
+# Import našich animovaných widgetů ze sdíleného souboru
+from UI.shared_widgets import AnimatedActionButton, AnimatedComboBox
 
 # --- POMOCNÉ WIDGETY ---
 
@@ -76,51 +79,42 @@ class SettingsPage(QWidget):
 
         # 1. SEKCE: VZHLED
         self.content_layout.addWidget(SectionHeader("Vzhled a Jazyk"))
-        self.theme_combo = QComboBox()
+        
+        # POUŽITÍ ANIMOVANÉHO BOXU PRO TÉMA
+        self.theme_combo = AnimatedComboBox()
+        self.theme_combo.setFixedWidth(250)
         self.theme_combo.addItems(list(THEMES.keys()))
         current_theme = self.settings.get("theme", "Dark (Default)")
         self.theme_combo.setCurrentText(current_theme if current_theme in THEMES else "Dark (Default)")
         self.theme_combo.currentTextChanged.connect(self.save_theme)
-        self._style_combo(self.theme_combo)
+        
         self.content_layout.addWidget(SettingRow("Barevný motiv", "Vyberte si světlý nebo tmavý režim.", self.theme_combo))
 
-        self.lang_combo = QComboBox()
-        # Seznam jazyků
-        european_languages = [
-            "Čeština", "English", "Deutsch", "Slovenčina", "Polski", 
-            "Français", "Español", "Italiano", "Português", "Nederlands", 
-            "Dansk", "Svenska", "Norsk", "Suomi", "Magyar", "Română", 
-            "Ελληνικά", "Русский", "Українська", "Hrvatski", "Slovenščina", 
-            "Srpski", "Български", "Eesti", "Latviešu", "Lietuvių", "Türkçe"
-        ]
-        european_languages.sort() # Seřadit abecedně (A-Z)
-        
-        self.lang_combo.addItems(european_languages)
-        
-        # Nastavení aktuálního jazyka (pokud není v seznamu, defaultně Čeština)
+        # POUŽITÍ ANIMOVANÉHO BOXU PRO JAZYK
+        self.lang_combo = AnimatedComboBox()
+        self.lang_combo.setFixedWidth(250)
+        languages = ["Čeština", "English"]
+        self.lang_combo.addItems(languages)
         current_lang = self.settings.get("language", "Čeština")
-        self.lang_combo.setCurrentText(current_lang)
-        
+        self.lang_combo.setCurrentText(current_lang if current_lang in languages else "Čeština")
         self.lang_combo.currentTextChanged.connect(self.save_lang)
-        self._style_combo(self.lang_combo)
         
         self.content_layout.addWidget(SettingRow("Jazyk aplikace", "Změna se projeví po restartu.", self.lang_combo))
         self.content_layout.addWidget(Separator())
 
         # 2. SEKCE: SYSTÉM
         self.content_layout.addWidget(SectionHeader("Systém"))
-        btn_update = QPushButton("Zkontrolovat aktualizace")
-        self._style_link_btn(btn_update)
+        
+        # Tlačítko (zde byla odstraněna změna barvy na accent)
+        btn_update = AnimatedActionButton(" Zkontrolovat aktualizace", "assets/images/arrows-clockwise-thin.png")
         
         if self.updater:
-            # Pokud máme updater, připojíme ho (tlačítko zavolá logiku stahování)
             btn_update.clicked.connect(lambda: self.updater.check_for_updates(silent=False))
         else:
-            # Pokud updater není (např. chyba inicializace), vypneme tlačítko
             btn_update.clicked.connect(lambda: QMessageBox.warning(self, "Chyba", "Modul aktualizací není dostupný."))
             btn_update.setEnabled(False)
             
-        self.content_layout.addWidget(SettingRow("Aktualizace", "Zkontrolujte dostupnost nové verze.", btn_update))
+        self.content_layout.addWidget(SettingRow("Aktualizace", "Zkontrolujte dostupnost nové verze programu OmniDesk.", btn_update))
 
         self.content_layout.addStretch()
         self.scroll_area.setWidget(self.content_widget)
@@ -136,18 +130,8 @@ class SettingsPage(QWidget):
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet(f"QPushButton {{ background-color: {COLORS['accent']}; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; }} QPushButton:hover {{ background-color: {COLORS['accent_hover']}; }}")
 
-    def _style_link_btn(self, btn):
-        btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {COLORS['fg']}; border: none; text-align: left; }} QPushButton:hover {{ color: {COLORS['accent']}; text-decoration: underline; }}")
-
-    def _style_combo(self, combo):
-        combo.setFixedWidth(250)
-        combo.setCursor(Qt.CursorShape.PointingHandCursor)
-        combo.setStyleSheet(f"QComboBox {{ background-color: {COLORS['input_bg']}; color: white; border: 1px solid {COLORS['border']}; padding: 5px; border-radius: 4px; }} QComboBox::drop-down {{ border: none; }}")
-        
     def _style_checkbox(self, chk):
         chk.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Checkbox styl (čtvereček)
         chk.setStyleSheet(f"""
             QCheckBox::indicator {{ width: 20px; height: 20px; border: 1px solid {COLORS['border']}; border-radius: 4px; background: {COLORS['input_bg']}; }}
             QCheckBox::indicator:checked {{ background: {COLORS['accent']}; image: url(check.png); border: 1px solid {COLORS['accent']}; }}

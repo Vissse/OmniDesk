@@ -136,7 +136,7 @@ def get_pc_specs(progress_callback=None):
         except: pass
 
         # --- CPU ---
-        report("Zjišťuji procesor (CPU)...")
+        report("Zjišťuji procesor...")
         try:
             cpu_info = c.Win32_Processor()[0]
             specs["cpu"] = cpu_info.Name.strip()
@@ -155,7 +155,7 @@ def get_pc_specs(progress_callback=None):
         except: specs["cpu"] = "Chyba načítání CPU"
 
         # --- GPU ---
-        report("Zjišťuji grafickou kartu (GPU)...")
+        report("Zjišťuji grafickou kartu...")
         try:
             for gpu in c.Win32_VideoController():
                 g_name = gpu.Name
@@ -198,7 +198,7 @@ def get_pc_specs(progress_callback=None):
         except: pass
         
         # --- RAM ---
-        report("Zjišťuji operační paměť (RAM)...")
+        report("Zjišťuji operační paměť...")
         try:
             total_ram_bytes = 0
             for ram in c.Win32_PhysicalMemory():

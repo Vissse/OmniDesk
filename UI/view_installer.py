@@ -8,6 +8,7 @@ from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QDesktopServices, QPai
 
 from core.config import COLORS
 from core.config import resource_path
+from UI.shared_widgets import AnimatedActionButton, add_vertical_separator
 
 try:
     from core.presets import PRESETS, APP_CATEGORIES
@@ -26,119 +27,6 @@ CATEGORY_ICONS = {
     "🛠️ Systémové nástroje (Utilities)": "assets/images/windows-logo-thin.png",
     "💻 Vývojářské nástroje": "assets/images/code-thin.png"
 }
-
-# --- ANIMOVANÉ TLAČÍTKO PRO HORNÍ LIŠTU (S MODRÝM PROUŽKEM) ---
-class AnimatedActionButton(QPushButton):
-    def __init__(self, text, icon_path, parent=None):
-        super().__init__(text, parent)
-        self.setFixedHeight(34)
-        self.icon_path = icon_path
-        
-        self._bg_color = QColor("transparent")
-        self._bar_height_factor = 0.0
-        
-        self.setStyleSheet(f"""
-            QPushButton {{ 
-                background: transparent; 
-                color: {COLORS['fg']}; 
-                border: none; 
-                padding: 0 15px; 
-                font-weight: bold; 
-                font-size: 10pt; 
-                text-align: left;
-            }}
-            QPushButton:disabled {{ 
-                color: {COLORS['sub_text']}; 
-            }}
-        """)
-        
-        self.anim = QVariantAnimation(self)
-        self.anim.setDuration(200)
-        self.anim.setStartValue(0.0)
-        self.anim.setEndValue(1.0)
-        self.anim.valueChanged.connect(self._animate_step)
-        
-        self.update_visual_state()
-
-    def get_colored_icon(self, color_hex):
-        full_path = resource_path(self.icon_path)
-        if not os.path.exists(full_path): return QIcon()
-        pixmap = QPixmap(full_path)
-        colored = QPixmap(pixmap.size())
-        colored.fill(Qt.GlobalColor.transparent)
-        p = QPainter(colored)
-        p.drawPixmap(0, 0, pixmap)
-        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-        p.fillRect(colored.rect(), QColor(color_hex))
-        p.end()
-        return QIcon(colored)
-
-    def setEnabled(self, enabled):
-        super().setEnabled(enabled)
-        self.update_visual_state()
-
-    def update_visual_state(self):
-        if self.isEnabled():
-            self.setCursor(Qt.CursorShape.PointingHandCursor)
-            if self.icon_path:
-                self.setIcon(self.get_colored_icon(COLORS['fg']))
-        else:
-            self.setCursor(Qt.CursorShape.ArrowCursor)
-            if self.icon_path:
-                self.setIcon(self.get_colored_icon(COLORS['sub_text']))
-            self.anim.stop()
-            self._bar_height_factor = 0.0
-            self._bg_color = QColor("transparent")
-        self.update()
-
-    def _animate_step(self, val):
-        self._bar_height_factor = val
-        target_bg = QColor(COLORS['item_hover'])
-        self._bg_color = QColor(target_bg.red(), target_bg.green(), target_bg.blue(), int(255 * val))
-        self.update()
-
-    def enterEvent(self, event):
-        if self.isEnabled():
-            self.anim.setDirection(QVariantAnimation.Direction.Forward)
-            self.anim.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        if self.isEnabled():
-            self.anim.setDirection(QVariantAnimation.Direction.Backward)
-            self.anim.start()
-        else:
-            self._bar_height_factor = 0.0
-            self._bg_color = QColor("transparent")
-            self.update()
-        super().leaveEvent(event)
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = self.rect()
-        radius = 6
-
-        if self._bg_color.alpha() > 0:
-            p.setBrush(self._bg_color)
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawRoundedRect(rect, radius, radius)
-
-        if self._bar_height_factor > 0:
-            p.setBrush(QColor(COLORS['accent']))
-            p.setPen(Qt.PenStyle.NoPen)
-            h = rect.height() * self._bar_height_factor
-            y = rect.y() + (rect.height() - h) / 2
-            
-            path = QPainterPath()
-            path.addRoundedRect(rect.x(), rect.y(), rect.width(), rect.height(), radius, radius)
-            p.setClipPath(path)
-            p.drawRect(QRect(rect.x(), int(y), 4, int(h)))
-            p.setClipping(False)
-            
-        p.end()
-        super().paintEvent(event)
-
 
 class HoverButton(QPushButton):
     def __init__(self, text, icon_path, style_template, parent=None, hover_style="accent"):
@@ -186,8 +74,6 @@ class HoverButton(QPushButton):
         self.set_colored_icon(False)
         super().leaveEvent(event)
 
-
-# --- KULATÉ TLAČÍTKO PRO PŘIDÁNÍ/ODEBRÁNÍ Z FRONTY (IKONY PLUS/MINUS) ---
 class QueueToggleButton(QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -274,7 +160,6 @@ class QueueToggleButton(QPushButton):
             p.drawPixmap(x, y, colored_pix)
 
 
-# --- DIALOG NASTAVENÍ ---
 class InstallationOptionsDialog(QDialog):
     def __init__(self, parent=None, current_options=None):
         super().__init__(parent)
@@ -346,7 +231,6 @@ class InstallationOptionsDialog(QDialog):
         return { "admin": self.chk_admin.isChecked(), "interactive": self.chk_interactive.isChecked(), "hash": self.chk_hash.isChecked(), "version": self.combo_version.currentText(), "arch": self.combo_arch.currentText(), "scope": self.combo_scope.currentText(), "path": self.path_edit.text() }
 
 
-# --- SPODNÍ INFORMAČNÍ PANEL (VYSOUVACÍ PROFI STYL) ---
 class AppDetailPanel(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -458,7 +342,7 @@ class AppDetailPanel(QFrame):
         if self.current_url:
             QDesktopServices.openUrl(QUrl(self.current_url))
 
-# --- WIDGET PRO KATALOG S HOVER ANIMACÍ VE STYLU "HEALTH" ---
+
 class CompactAppWidget(QWidget):
     def __init__(self, data, parent_controller):
         super().__init__()
@@ -569,8 +453,6 @@ class CompactAppWidget(QWidget):
             self.is_queued = is_checked
             self.btn_pick.set_queued(self.is_queued)
 
-
-# --- HLAVNÍ UI (InstallerPage) ---
 class InstallerPage(QWidget):
     def __init__(self, queue_page_ref):
         super().__init__()
@@ -580,7 +462,6 @@ class InstallerPage(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0); main_layout.setSpacing(0)
 
-        # A. HORNÍ VYHLEDÁVACÍ LIŠTA
         top_bar = QWidget()
         top_bar.setStyleSheet(f"background-color: {COLORS['bg_main']}; border-bottom: 1px solid {COLORS['border']};")
         top_layout = QHBoxLayout(top_bar)
@@ -609,7 +490,6 @@ class InstallerPage(QWidget):
         top_layout.addWidget(self.search_container); top_layout.addStretch()
         main_layout.addWidget(top_bar)
 
-        # B. ACTION BAR S NOVÝMI TLAČÍTKY (Animované jako v Health/Updateru)
         action_bar = QWidget()
         action_bar.setStyleSheet(f"background-color: {COLORS['bg_main']};")
         action_layout = QHBoxLayout(action_bar)
@@ -619,7 +499,7 @@ class InstallerPage(QWidget):
         self.btn_install_selection.clicked.connect(self.run_install_from_bar)
         action_layout.addWidget(self.btn_install_selection)
 
-        self.add_separator(action_layout)
+        add_vertical_separator(action_layout)
 
         self.btn_settings_quick = AnimatedActionButton(" Nastavení instalace", "assets/images/gear-six-thin.png")
         self.btn_settings_quick.clicked.connect(self.open_options_dialog)
@@ -639,12 +519,10 @@ class InstallerPage(QWidget):
         h_sep.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
         main_layout.addWidget(h_sep)
 
-        # ROZDĚLENÝ LAYOUT PRO KATALOG A DETAIL PANEL (Vertikální pro spodní vyjíždění)
         self.split_layout = QVBoxLayout()
         self.split_layout.setContentsMargins(0, 0, 0, 0)
         self.split_layout.setSpacing(0)
 
-        # C. KATALOG (ScrollArea)
         self.catalog_widget = QWidget()
         catalog_layout = QVBoxLayout(self.catalog_widget)
         catalog_layout.setContentsMargins(30, 10, 30, 10)
@@ -743,14 +621,12 @@ class InstallerPage(QWidget):
 
         self.split_layout.addWidget(self.catalog_widget, stretch=1)
 
-        # D. BOČNÍ DETAIL PANEL (Vysouvá zespodu)
         self.detail_panel = AppDetailPanel(self)
         self.detail_panel.btn_close.clicked.connect(self.hide_app_details)
         self.split_layout.addWidget(self.detail_panel)
 
         main_layout.addLayout(self.split_layout, stretch=1)
 
-        # E. NASTAVENÍ ANIMACÍ PRO VYSOUVACÍ PANEL
         self.panel_anim_group = QParallelAnimationGroup()
         self.anim_min = QPropertyAnimation(self.detail_panel, b"minimumHeight")
         self.anim_max = QPropertyAnimation(self.detail_panel, b"maximumHeight")
@@ -759,15 +635,6 @@ class InstallerPage(QWidget):
         self.panel_anim_group.addAnimation(self.anim_min)
         self.panel_anim_group.addAnimation(self.anim_max)
 
-    def add_separator(self, layout):
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setFixedWidth(1)
-        sep.setFixedHeight(18)
-        sep.setStyleSheet(f"background: {COLORS['border']}; border: none;")
-        layout.addWidget(sep)
-
-    # --- LOGIKA DETAIL PANELU ---
     def show_app_details(self, data):
         self.detail_panel.update_data(data)
         if self.detail_panel.maximumHeight() == 0:
@@ -788,8 +655,6 @@ class InstallerPage(QWidget):
         self.anim_max.setEndValue(0)
         self.panel_anim_group.start()
 
-
-    # --- POMOCNÉ FUNKCE ---
     def filter_catalog(self):
         query = self.search_input.text().strip().lower()
         for cat in self.categories_ui:

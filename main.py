@@ -41,6 +41,7 @@ from UI.splash import SplashScreen
 from core import boot_system
 from core.updater import AppUpdater
 from UI.view_specs import get_pc_specs
+from UI.shared_widgets import AnimatedSidebarButton
 
 window = None
 final_specs = None 
@@ -184,11 +185,16 @@ class MainWindow(QMainWindow):
         sep_frame = QFrame(); sep_frame.setFixedHeight(1); sep_frame.setStyleSheet(f"background-color: {COLORS['border']}; margin: 0 15px;")
         sidebar_layout.addWidget(sep_frame); sidebar_layout.addSpacing(10)
 
-        self.btn_settings = QPushButton(" Nastavení")
-        self.btn_settings.setIcon(QIcon(resource_path("assets/images/gear-thin.png"))); self.btn_settings.setIconSize(QSize(20, 20)); self.btn_settings.setFixedHeight(40)
-        self.btn_settings.clicked.connect(self.go_to_settings); self._style_bottom_btn(self.btn_settings)
-        btn_container = QHBoxLayout(); btn_container.setContentsMargins(15, 0, 15, 20); btn_container.addWidget(self.btn_settings)
-        sidebar_layout.addLayout(btn_container); main_layout.addWidget(sidebar_container)
+        # Nahraď staré vytvoření tlačítka a jeho zdlouhavé stylování
+        self.btn_settings = AnimatedSidebarButton(" Nastavení", "assets/images/gear-thin.png")
+        self.btn_settings.clicked.connect(self.go_to_settings)
+        
+        # Vložení do layoutu s okrajem nula (odsazení je zabudované ve widgetu)
+        btn_container = QHBoxLayout()
+        btn_container.setContentsMargins(0, 0, 0, 15)
+        btn_container.addWidget(self.btn_settings)
+        sidebar_layout.addLayout(btn_container)
+        main_layout.addWidget(sidebar_container)
 
         self.pages = QStackedWidget(); main_layout.addWidget(self.pages)
         self.queue_page = QueuePage(); self.updater_page = UpdaterPage()
@@ -247,12 +253,24 @@ class MainWindow(QMainWindow):
         if idx is not None and idx != -1: self.navigate_to_page(idx)
 
     def navigate_to_page(self, index):
+        found_in_list = False
         for i in range(self.sidebar_list.count()):
             if self.sidebar_list.item(i).data(Qt.ItemDataRole.UserRole) == index:
-                self.sidebar_list.setCurrentRow(i); break
-        self.pages.setCurrentIndex(index); self._style_bottom_btn(self.btn_settings, active=(index == 5))
+                self.sidebar_list.setCurrentRow(i)
+                found_in_list = True
+                break
+                
+        # Pokud klikneme na Nastavení (není v seznamu), vymažeme aktuální výběr
+        if not found_in_list:
+            self.sidebar_list.setCurrentRow(-1)
+            
+        self.pages.setCurrentIndex(index)
+        
+        # Zapne/vypne aktivní stav u tlačítka Nastavení (index 5)
+        self.btn_settings.set_active(index == 5)
 
-    def go_to_settings(self): self.sidebar_list.clearSelection(); self.navigate_to_page(5)
+    def go_to_settings(self):
+        self.navigate_to_page(5)
 
     def _style_bottom_btn(self, btn, active=False):
         bg = COLORS['item_bg'] if active else "transparent"; tx = "white" if active else COLORS['sub_text']

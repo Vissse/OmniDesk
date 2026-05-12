@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-CURRENT_VERSION = "1.0.4"
+CURRENT_VERSION = "1.0.5"
 
 try:
     _docs_dir = Path.home() / "Documents" / "OmniDesk"
@@ -17,7 +17,7 @@ except Exception:
 # --- 1. DEFINICE TÉMAT ---
 # Musí obsahovat všechny klíče, které používají nové PyQt views
 THEMES = {
-    "Dark (Default)": {
+    "Dark": {
         "bg_main": "#1e1e1e",
         "bg_sidebar": "#252526",
         "fg": "#ffffff",
@@ -53,7 +53,7 @@ THEMES = {
 
 # --- 2. NAČTENÍ AKTIVNÍHO TÉMATU ---
 # Defaultně nastavíme Dark
-COLORS = THEMES["Dark (Default)"].copy()
+COLORS = THEMES["Dark"].copy()
 
 
 def resource_path(relative_path):
@@ -71,7 +71,7 @@ try:
     if os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            saved_theme = data.get("theme", "Dark (Default)")
+            saved_theme = data.get("theme", "Dark")
             
             # Fallback pro staré názvy témat
             if saved_theme == "Notion Light": saved_theme = "Light"

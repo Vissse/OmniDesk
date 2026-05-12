@@ -1,122 +1,179 @@
 import os
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel)
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap
-from core.config import COLORS, CURRENT_VERSION
-from core.config import resource_path
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                             QGridLayout, QFrame, QScrollArea)
+from PyQt6.QtCore import Qt, QVariantAnimation
+from PyQt6.QtGui import QPixmap, QPainter, QColor
 
-class FunctionRow(QWidget):
-    """Minimalistický řádek funkce s obrázkovou ikonou"""
-    def __init__(self, icon_name, title, desc, color_hex):
-        super().__init__()
-        self.setStyleSheet("background: transparent;")
+from core.config import COLORS, CURRENT_VERSION, resource_path
+
+class ModuleCard(QFrame):
+    """Moderní, minimalistická karta modulu s hover animací."""
+    def __init__(self, icon_name, title, desc, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(115)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 10, 0, 10)
-        layout.setSpacing(20)
+        # Výchozí barvy pro animaci
+        self._bg_color = QColor(COLORS['item_bg'])
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(8)
+        
+        # --- HORNÍ ŘÁDEK (Ikona + Nadpis) ---
+        top_layout = QHBoxLayout()
+        top_layout.setSpacing(12)
+        top_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         
         # Ikona
-        icon_container = QLabel()
-        icon_container.setFixedSize(48, 48)
-        icon_container.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_container.setStyleSheet(f"""
-            background-color: {COLORS['item_bg']};
-            border-radius: 8px;
-            border: 1px solid {COLORS['border']};
-        """)
-        
-        # Načtení PNG ikony
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(24, 24)
         icon_path = resource_path(os.path.join("assets/images", icon_name))
         if os.path.exists(icon_path):
-            pix = QPixmap(icon_path)
-            # Přebarvení ikony není triviální bez maskování, 
-            # takže použijeme bílou ikonu na tmavém pozadí.
-            # Zmenšíme ji trochu, aby měla padding
-            pix = pix.scaled(28, 28, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            icon_container.setPixmap(pix)
+            pix = QPixmap(icon_path).scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            colored = QPixmap(pix.size())
+            colored.fill(Qt.GlobalColor.transparent)
+            p = QPainter(colored)
+            p.drawPixmap(0, 0, pix)
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            p.fillRect(colored.rect(), QColor(COLORS['fg']))
+            p.end()
+            icon_lbl.setPixmap(colored)
         else:
-            icon_container.setText("?")
+            icon_lbl.setText("•")
+            icon_lbl.setStyleSheet(f"color: {COLORS['fg']}; font-weight: bold;")
             
-        layout.addWidget(icon_container)
+        # Nadpis
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet(f"font-size: 15px; font-weight: bold; color: {COLORS['fg']}; background: transparent;")
         
-        # Texty
-        text_layout = QVBoxLayout()
-        text_layout.setSpacing(3)
+        top_layout.addWidget(icon_lbl)
+        top_layout.addWidget(title_lbl)
+        top_layout.addStretch()
         
-        lbl_title = QLabel(title)
-        lbl_title.setStyleSheet("font-size: 15px; font-weight: bold; color: white;")
+        # --- SPODNÍ ŘÁDEK (Popis) ---
+        desc_lbl = QLabel(desc)
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        desc_lbl.setStyleSheet(f"font-size: 12px; color: {COLORS['sub_text']}; background: transparent; line-height: 1.3;")
         
-        lbl_desc = QLabel(desc)
-        lbl_desc.setStyleSheet(f"font-size: 13px; color: {COLORS['sub_text']};")
-        lbl_desc.setWordWrap(True)
+        layout.addLayout(top_layout)
+        layout.addWidget(desc_lbl)
         
-        text_layout.addWidget(lbl_title)
-        text_layout.addWidget(lbl_desc)
-        layout.addLayout(text_layout)
+        # --- ANIMACE ---
+        self.anim = QVariantAnimation(self)
+        self.anim.setDuration(200)
+        self.anim.setStartValue(0.0)
+        self.anim.setEndValue(1.0)
+        self.anim.valueChanged.connect(self._animate_step)
+
+    def _animate_step(self, val):
+        c_start = QColor(COLORS['item_bg'])
+        c_end = QColor(COLORS['item_hover'])
+        r = c_start.red() + (c_end.red() - c_start.red()) * val
+        g = c_start.green() + (c_end.green() - c_start.green()) * val
+        b = c_start.blue() + (c_end.blue() - c_start.blue()) * val
+        self._bg_color = QColor(int(r), int(g), int(b))
+        self.update()
+
+    def enterEvent(self, event):
+        self.anim.setDirection(QVariantAnimation.Direction.Forward)
+        self.anim.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.anim.setDirection(QVariantAnimation.Direction.Backward)
+        self.anim.start()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect().adjusted(0, 0, -1, -1)
+        radius = 8
+        
+        # Vykreslení pozadí a jemného rámečku
+        p.setBrush(self._bg_color)
+        p.setPen(QColor(COLORS['border']))
+        p.drawRoundedRect(rect, radius, radius)
+        p.end()
+
 
 class HomePage(QWidget):
     def __init__(self):
         super().__init__()
         
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(40, 40, 40, 40)
-        main_layout.setSpacing(20)
-        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         
-        # 1. HEADER
-        try: user = os.getlogin()
-        except: user = "Uživatel"
+        # Scroll Area pro případ menšího okna
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ border: none; background: transparent; }}
+            QScrollBar:vertical {{ border: none; background-color: {COLORS['bg_main']}; width: 8px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background-color: #444; min-height: 20px; border-radius: 4px; }}
+            QScrollBar::handle:vertical:hover {{ background-color: {COLORS['accent']}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+        """)
         
+        content_widget = QWidget()
+        content_widget.setStyleSheet("background: transparent;")
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(45, 50, 45, 40)
+        content_layout.setSpacing(35)
+        content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        # --- 1. HEADER ---
+        header_layout = QVBoxLayout()
+        header_layout.setSpacing(5)
+        
+        try: 
+            user = os.getlogin()
+        except: 
+            user = "Uživatel"
+            
         lbl_welcome = QLabel(f"Vítejte, {user}")
-        lbl_welcome.setStyleSheet("font-size: 34px; font-weight: bold; color: white;")
-        main_layout.addWidget(lbl_welcome)
+        lbl_welcome.setStyleSheet("font-size: 32px; font-weight: bold; color: white;")
         
-        lbl_intro = QLabel("Toto je centrální rozcestník pro správu vašeho počítače.\nNíže naleznete vysvětlení dostupných modulů.")
-        lbl_intro.setStyleSheet(f"font-size: 14px; color: {COLORS['sub_text']}; margin-bottom: 20px;")
-        main_layout.addWidget(lbl_intro)
+        lbl_intro = QLabel("Toto je váš centrální rozcestník pro správu systému a aplikací.")
+        lbl_intro.setStyleSheet(f"font-size: 14px; color: {COLORS['sub_text']};")
+        
+        header_layout.addWidget(lbl_welcome)
+        header_layout.addWidget(lbl_intro)
+        content_layout.addLayout(header_layout)
 
-        # 2. SEZNAM FUNKCÍ (Vysvětlivky)
-        lbl_funcs_title = QLabel("PŘEHLED MODULŮ")
-        lbl_funcs_title.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {COLORS['accent']}; margin-bottom: 10px;")
-        main_layout.addWidget(lbl_funcs_title)
+        # --- 2. MŘÍŽKA MODULŮ ---
+        grid = QGridLayout()
+        grid.setSpacing(20)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        
+        modules = [
+            ("package-thin.png", "Katalog aplikací", "Procházejte a instalujte nový software čistě a bez zbytečného klikání."),
+            ("tray-arrow-down-thin.png", "Instalační fronta", "Hromadná, tichá instalace a automatická konfigurace vybraných programů."),
+            ("arrows-clockwise-thin.png", "Aktualizace", "Udržujte svůj systém v bezpečí pomocí hromadných aktualizací zastaralých verzí."),
+            ("trash-simple-thin.png", "Odinstalace", "Rychlé a čisté odstranění nepotřebného softwaru ze systému."),
+            ("heartbeat-thin.png", "Údržba PC", "Sada diagnostických nástrojů, opravy systémových chyb a čištění disku."),
+            ("desktop-thin.png", "Specifikace HW", "Detailní přehled o hardwaru, komponentách a úložištích vašeho počítače.")
+        ]
+        
+        # Automatické rozestavení do 2 sloupců
+        for index, (icon, title, desc) in enumerate(modules):
+            row = index // 2
+            col = index % 2
+            grid.addWidget(ModuleCard(icon, title, desc, self), row, col)
 
-        funcs_layout = QVBoxLayout()
-        funcs_layout.setSpacing(10)
-
-        funcs_layout.addWidget(FunctionRow(
-            "package-thin.png", "Chytrá instalace", 
-            "Modul pro rychlé vyhledávání a instalaci aplikací.",
-            COLORS['accent']
-        ))
+        content_layout.addLayout(grid)
+        content_layout.addStretch()
         
-        funcs_layout.addWidget(FunctionRow(
-            "arrows-clockwise-thin.png", "Aktualizace aplikací", 
-            "Automaticky skenuje nainstalovaný software a nabídne hromadnou aktualizaci zastaralých verzí.",
-            COLORS['success']
-        ))
-        
-        funcs_layout.addWidget(FunctionRow(
-            "trash-simple-thin.png", "Odinstalace aplikací", 
-            "Přehledný seznam všech nainstalovaných programů s možností jejich čistého odstranění.",
-            COLORS['danger']
-        ))
-        
-        funcs_layout.addWidget(FunctionRow(
-            "heartbeat-thin.png", "Kontrola stavu PC", 
-            "Sada diagnostických nástrojů: kontrola systémových souborů, stav baterie, čištění disku a optimalizace.",
-            COLORS['accent']
-        ))
-        
-        funcs_layout.addWidget(FunctionRow(
-            "desktop-thin.png", "Specifikace PC", 
-            "Detailní výpis hardwarových komponent vašeho počítače (Procesor, Grafika, RAM, Základní deska).",
-            COLORS['accent']
-        ))
-
-        main_layout.addLayout(funcs_layout)
-        main_layout.addStretch()
-        
-        lbl_footer = QLabel(f"OmniDesk v{CURRENT_VERSION} • Všestranný správce systému")
-        lbl_footer.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 11px; margin-top: 20px;")
+        # --- 3. FOOTER ---
+        lbl_footer = QLabel(f"OmniDesk v{CURRENT_VERSION} • Moderní správce systému")
+        lbl_footer.setStyleSheet(f"color: {COLORS['border']}; font-size: 11px; font-weight: bold;")
         lbl_footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(lbl_footer)
+        content_layout.addWidget(lbl_footer)
+
+        scroll.setWidget(content_widget)
+        main_layout.addWidget(scroll)
