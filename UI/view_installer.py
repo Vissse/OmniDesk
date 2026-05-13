@@ -598,9 +598,10 @@ class InstallerPage(QWidget):
                 for empty_idx in range(num_apps, total_cells):
                     col = empty_idx // num_rows
                     row = empty_idx % num_rows
-                    dummy = QWidget() 
+                    # I zde přidáme rodiče
+                    dummy = QWidget(self.catalog_widget) 
                     grid.addWidget(dummy, row, col)
-                    cat_dummies.append(dummy) 
+                    cat_dummies.append(dummy)
                         
                 c_layout.addLayout(grid)
                 self.categories_ui.append({
@@ -667,9 +668,14 @@ class InstallerPage(QWidget):
                     visible_widgets.append(w)
                 else:
                     w.hide()
+                    # ZÁSADNÍ OPRAVA: Odstraníme skrytý widget z mřížky,
+                    # aby QGridLayout přestal držet prázdné místo pro staré řádky.
+                    grid.removeWidget(w)
             
             for d in cat['dummies']:
                 d.hide()
+                # ZÁSADNÍ OPRAVA i pro výplňové dummy widgety
+                grid.removeWidget(d)
                 
             num_apps = len(visible_widgets)
             
@@ -679,6 +685,7 @@ class InstallerPage(QWidget):
                 for idx, w in enumerate(visible_widgets):
                     col = idx // num_rows
                     row = idx % num_rows
+                    # Přidáním do gridu si QGridLayout widget automaticky znovu převezme
                     grid.addWidget(w, row, col)
                 
                 total_cells = num_rows * 2
@@ -686,17 +693,22 @@ class InstallerPage(QWidget):
                 
                 if dummy_needed > 0:
                     if not cat['dummies']:
-                        cat['dummies'].append(QWidget())
+                        # Zde ponechán rodič (z předchozí opravy), aby nevznikal popup okno
+                        cat['dummies'].append(QWidget(self.catalog_widget))
                     d = cat['dummies'][0]
-                    d.show()
+                    # I dummy widgety nejprve přidáme do rozvržení a až pak zobrazíme
                     grid.addWidget(d, num_rows - 1, 1)
+                    d.show()
 
+            # DOPLŇKOVÁ OPRAVA: Pokud je kategorie zcela prázdná, zrušíme i její okraje
             if num_apps == 0:
                 cat['header'].hide()
                 cat['separator'].hide()
+                grid.setContentsMargins(0, 0, 0, 0)
             else:
                 cat['header'].show()
                 cat['separator'].show()
+                grid.setContentsMargins(0, 15, 0, 0)
 
     def refresh_catalog_checkboxes(self):
         for widget in self.catalog_widgets: widget.set_checked_state(widget.data['id'] in self.queue_page.queue_data)

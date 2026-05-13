@@ -1,4 +1,3 @@
-# install_manager.py
 import os
 import shutil
 import subprocess
@@ -12,7 +11,7 @@ from core.settings_manager import SettingsManager # IMPORT NASTAVENÍ
 
 # --- PRACOVNÍ VLÁKNO (Instalace na pozadí) ---
 class InstallationWorker(QThread):
-    log_signal = pyqtSignal(str)           
+    log_signal = pyqtSignal(str)          
     status_signal = pyqtSignal(str)        
     progress_signal = pyqtSignal(int)      
     finished_signal = pyqtSignal(list)     
@@ -70,7 +69,7 @@ class InstallationWorker(QThread):
             scope = self.settings.get("winget_scope", "machine")
             args.append(f'--scope {scope}')
 
-            #NOVÉ: Location (Vlastní cesta)
+            # Location (Vlastní cesta)
             custom_location = self.settings.get("winget_location", "")
             if custom_location:
                 # Cestu musíme obalit uvozovkami pro případ mezer
@@ -87,9 +86,6 @@ class InstallationWorker(QThread):
 
             # Finální příkaz
             cmd = f'winget install {" ".join(args)}'
-            
-            # Pro jistotu vypíšeme příkaz do logu (užitečné pro debug)
-            # self.log_signal.emit(f"CMD: {cmd}\n") 
 
             try:
                 startupinfo = subprocess.STARTUPINFO()
@@ -129,6 +125,12 @@ class InstallationWorker(QThread):
 
             self.progress_signal.emit(i + 1)
 
+        # --- 3. ÚKLID PLOCHY ---
+        # Spustí se po dokončení všech instalací
+        if self.is_running:
+            self.status_signal.emit("Probíhá úklid pracovní plochy...")
+            self.clean_desktop_duplicates()
+
         self.finished_signal.emit(failed_apps)
 
     def create_desktop_shortcut(self, app_name):
@@ -158,6 +160,29 @@ class InstallationWorker(QThread):
                 if found: break
         except Exception as e:
             self.log_signal.emit(f"(Info: Zástupce nevytvořen: {e})\n")
+
+    def clean_desktop_duplicates(self):
+        """Vyhledá a smaže duplicitní zástupce (ponechá ty ve veřejné složce a smaže uživatelské)."""
+        self.log_signal.emit("\n--- ÚKLID PLOCHY ---\n")
+        try:
+            user_desktop = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
+            public_desktop = os.path.join(os.environ.get("PUBLIC", "C:\\Users\\Public"), "Desktop")
+
+            if not os.path.exists(user_desktop) or not os.path.exists(public_desktop):
+                return
+
+            for item in os.listdir(public_desktop):
+                if item.endswith(".lnk"):
+                    user_shortcut = os.path.join(user_desktop, item)
+                    
+                    if os.path.exists(user_shortcut):
+                        try:
+                            os.remove(user_shortcut)
+                            self.log_signal.emit(f"🧹 Smazán duplikát zástupce: {item}\n")
+                        except Exception as e:
+                            self.log_signal.emit(f"⚠️ Nepodařilo se smazat duplikát {item}: {e}\n")
+        except Exception as e:
+            self.log_signal.emit(f"⚠️ Chyba při čištění plochy: {e}\n")
 
     def stop(self):
         self.is_running = False

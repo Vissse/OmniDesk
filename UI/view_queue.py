@@ -3,14 +3,15 @@ import json
 import subprocess
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QListWidget, QListWidgetItem, 
-                             QMessageBox, QFileDialog, QFrame, QLineEdit, QCheckBox)
+                             QMessageBox, QFileDialog, QFrame, QLineEdit)
 from PyQt6.QtCore import Qt, QSize, QVariantAnimation, QRect, QThread, pyqtSignal
-from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter, QPainterPath
+from PyQt6.QtGui import QPixmap, QColor, QPainter, QPainterPath
 
 from core.config import COLORS, resource_path
 from core.install_manager import InstallationDialog
 from UI.view_installer import InstallationOptionsDialog
 from UI.shared_widgets import AnimatedActionButton, add_vertical_separator
+from UI.view_installer import InstallationOptionsDialog, HoverButton
 
 class VersionFetchWorker(QThread):
     version_found = pyqtSignal(str)
@@ -48,6 +49,7 @@ class VersionFetchWorker(QThread):
         except Exception:
             self.version_found.emit("Neznámá")
 
+
 class QueueRowWidget(QWidget):
     def __init__(self, data, parent_controller, queue_page_ref, cached_icon=None):
         super().__init__()
@@ -66,19 +68,8 @@ class QueueRowWidget(QWidget):
         layout.setContentsMargins(15, 2, 20, 2)
         layout.setSpacing(15)
         layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        
-        self.chk = QCheckBox()
-        self.chk.setFixedWidth(24)
-        self.chk.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.chk.setStyleSheet(f"""
-            QCheckBox::indicator {{ width: 18px; height: 18px; border: 1px solid {COLORS['sub_text']}; border-radius: 4px; background: transparent; }}
-            QCheckBox::indicator:checked {{ background-color: {COLORS['accent']}; border-color: {COLORS['accent']}; image: url(check.png); }} 
-        """)
-        
-        self.chk.setChecked(True)
-        self.chk.stateChanged.connect(self.queue_page.update_selection_ui)
-        layout.addWidget(self.chk)
 
+        # Ikonka aplikace
         self.icon_lbl = QLabel()
         self.icon_lbl.setFixedSize(28, 28)
         self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -95,6 +86,7 @@ class QueueRowWidget(QWidget):
                 self.icon_lbl.setStyleSheet("font-size: 16px; color: #888; border: none; background: transparent;")
         layout.addWidget(self.icon_lbl)
 
+        # Texty (Název, oddělovač, verze)
         text_layout = QHBoxLayout()
         text_layout.setSpacing(8)
         text_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -114,17 +106,30 @@ class QueueRowWidget(QWidget):
         text_layout.addStretch()
         layout.addLayout(text_layout, stretch=1)
 
+        # Tlačítko pro odstranění (křížek) zarovnané doprava
+        self.btn_remove = HoverButton("", "assets/images/x-thin.png", "sub_text", hover_style="danger")
+        self.btn_remove.setFixedSize(28, 28)
+        self.btn_remove.setIconSize(QSize(18, 18))
+        self.btn_remove.setToolTip("Odebrat aplikaci z fronty")
+        self.btn_remove.clicked.connect(self.remove_self)
+        layout.addWidget(self.btn_remove)
+
+        # Načítání verze na pozadí
         if data.get('version') in [None, "Latest", "Unknown", "Neznámá", "Načítání...", ""]:
             self.ver_lbl.setText("Načítání...")
             self.ver_worker = VersionFetchWorker(self.data['id'])
             self.ver_worker.version_found.connect(self.on_version_found)
             self.ver_worker.start()
 
+        # Animace při najetí myší
         self.anim = QVariantAnimation(self)
         self.anim.setDuration(200)
         self.anim.setStartValue(0.0)
         self.anim.setEndValue(1.0)
         self.anim.valueChanged.connect(self._animate_step)
+
+    def remove_self(self):
+        self.queue_page.remove_item_by_id(self.data['id'])
 
     def on_version_found(self, version):
         self.ver_lbl.setText(version)
@@ -138,7 +143,7 @@ class QueueRowWidget(QWidget):
 
     def _animate_step(self, val):
         self._bar_height_factor = val
-        target_bg = QColor(COLORS['item_hover'])
+        target_bg = QColor(COLORS.get('item_hover', '#2d2d30'))
         self._bg_color = QColor(target_bg.red(), target_bg.green(), target_bg.blue(), int(255 * val))
         self.update()
 
@@ -149,12 +154,6 @@ class QueueRowWidget(QWidget):
     def leaveEvent(self, event):
         self.anim.setDirection(QVariantAnimation.Direction.Backward)
         self.anim.start()
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            if not self.chk.underMouse():
-                self.chk.setChecked(not self.chk.isChecked())
-        super().mousePressEvent(event)
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -168,7 +167,7 @@ class QueueRowWidget(QWidget):
             p.drawRoundedRect(rect, radius, radius)
             
         if self._bar_height_factor > 0:
-            p.setBrush(QColor(COLORS['accent']))
+            p.setBrush(QColor(COLORS.get('accent', '#0078d4')))
             p.setPen(Qt.PenStyle.NoPen)
             h = rect.height() * self._bar_height_factor
             y = rect.y() + (rect.height() - h) / 2
@@ -178,6 +177,7 @@ class QueueRowWidget(QWidget):
             p.setClipPath(path)
             p.drawRect(QRect(rect.x(), int(y), 4, int(h)))
             p.setClipping(False)
+
 
 class QueuePage(QWidget):
     def __init__(self):
@@ -190,6 +190,7 @@ class QueuePage(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        # --- HORNI LISTA ---
         top_bar = QWidget()
         top_bar.setStyleSheet(f"background-color: {COLORS['bg_main']}; border-bottom: 1px solid {COLORS['border']};")
         top_layout = QHBoxLayout(top_bar)
@@ -203,7 +204,7 @@ class QueuePage(QWidget):
         self.search_container = QFrame()
         self.search_container.setFixedWidth(500)
         self.search_container.setFixedHeight(38)
-        self.search_container.setStyleSheet(f"QFrame {{ background-color: {COLORS['input_bg']}; border: 1px solid {COLORS['border']}; border-radius: 6px; }} QFrame:focus-within {{ border: 1px solid {COLORS['accent']}; }}")
+        self.search_container.setStyleSheet(f"QFrame {{ background-color: {COLORS['input_bg']}; border: 1px solid {COLORS['border']}; border-radius: 6px; }} QFrame:focus-within {{ border: 1px solid {COLORS.get('accent', '#0078d4')}; }}")
         
         search_cont_layout = QHBoxLayout(self.search_container)
         search_cont_layout.setContentsMargins(10, 0, 5, 0)
@@ -227,7 +228,7 @@ class QueuePage(QWidget):
             cp = QPainter(colored_pix)
             cp.drawPixmap(0, 0, pix_s)
             cp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-            cp.fillRect(colored_pix.rect(), QColor(COLORS['sub_text']))
+            cp.fillRect(colored_pix.rect(), QColor(COLORS.get('sub_text', '#a0a0a0')))
             cp.end()
             search_input_icon.setPixmap(colored_pix)
             
@@ -236,62 +237,64 @@ class QueuePage(QWidget):
         top_layout.addStretch()
         main_layout.addWidget(top_bar)
 
+        # --- AKCNI LISTA (DVOUŘÁDKOVÁ) ---
         action_bar = QWidget()
         action_bar.setStyleSheet(f"background-color: {COLORS['bg_main']};")
-        action_layout = QHBoxLayout(action_bar)
-        action_layout.setContentsMargins(20, 10, 20, 10)
-        action_layout.setSpacing(5)
-
-        install_group = QHBoxLayout()
-        install_group.setSpacing(0)
         
-        self.btn_install_main = AnimatedActionButton(" Nainstalovat vybrané", "assets/images/download-simple-thin.png")
+        action_layout = QVBoxLayout(action_bar)
+        action_layout.setContentsMargins(20, 10, 20, 10)
+        action_layout.setSpacing(10)
+
+        # PRVNÍ ŘÁDEK
+        row1_layout = QHBoxLayout()
+        row1_layout.setSpacing(5)
+
+        self.btn_install_main = AnimatedActionButton(" Nainstalovat vše", "assets/images/download-simple-thin.png")
         self.btn_install_main.setEnabled(False)
         self.btn_install_main.clicked.connect(self.run_installation)
-        install_group.addWidget(self.btn_install_main)
+        row1_layout.addWidget(self.btn_install_main)
         
-        sep_inner = QFrame()
-        sep_inner.setFrameShape(QFrame.Shape.VLine)
-        sep_inner.setFixedWidth(1)
-        sep_inner.setFixedHeight(18)
-        sep_inner.setStyleSheet(f"background: {COLORS['border']}; border: none; margin: 0 5px;")
-        install_group.addWidget(sep_inner)
+        add_vertical_separator(row1_layout)
         
-        self.btn_settings_quick = AnimatedActionButton(" Nastavení", "assets/images/gear-six-thin.png")
+        self.btn_settings_quick = AnimatedActionButton(" Nastavení instalace", "assets/images/gear-six-thin.png")
         self.btn_settings_quick.clicked.connect(self.open_options_dialog)
-        install_group.addWidget(self.btn_settings_quick)
+        row1_layout.addWidget(self.btn_settings_quick)
         
-        action_layout.addLayout(install_group)
-        add_vertical_separator(action_layout)
+        row1_layout.addStretch()
+        action_layout.addLayout(row1_layout)
 
-        self.btn_new = AnimatedActionButton(" Nová", "assets/images/plus-thin.png")
+        # DRUHÝ ŘÁDEK
+        row2_layout = QHBoxLayout()
+        row2_layout.setSpacing(5)
+
+        self.btn_new = AnimatedActionButton(" Nová fronta", "assets/images/plus-thin.png")
         self.btn_new.clicked.connect(self.clear_queue)
-        action_layout.addWidget(self.btn_new)
+        row2_layout.addWidget(self.btn_new)
+
+        add_vertical_separator(row2_layout)
 
         self.btn_open = AnimatedActionButton(" Otevřít", "assets/images/folder-open-thin.png")
         self.btn_open.clicked.connect(self.load_from_json)
-        action_layout.addWidget(self.btn_open)
+        row2_layout.addWidget(self.btn_open)
+
+        add_vertical_separator(row2_layout)
 
         self.btn_save = AnimatedActionButton(" Uložit", "assets/images/floppy-disk-thin.png")
         self.btn_save.clicked.connect(self.save_to_json)
-        action_layout.addWidget(self.btn_save)
+        row2_layout.addWidget(self.btn_save)
 
-        add_vertical_separator(action_layout)
+        add_vertical_separator(row2_layout)
 
-        self.btn_ps1 = AnimatedActionButton(" Skript", "assets/images/terminal-window-thin.png")
+        self.btn_ps1 = AnimatedActionButton(" Vytvořit instalační skript", "assets/images/terminal-window-thin.png")
         self.btn_ps1.clicked.connect(self.save_powershell_script)
-        action_layout.addWidget(self.btn_ps1)
+        row2_layout.addWidget(self.btn_ps1)
 
-        add_vertical_separator(action_layout)
+        row2_layout.addStretch()
+        action_layout.addLayout(row2_layout)
 
-        self.btn_remove_selected = AnimatedActionButton(" Odebrat vybrané", "assets/images/trash-thin.png", hover_color="danger")
-        self.btn_remove_selected.setEnabled(False)
-        self.btn_remove_selected.clicked.connect(self.remove_selected_items)
-        action_layout.addWidget(self.btn_remove_selected)
-
-        action_layout.addStretch()
         main_layout.addWidget(action_bar)
 
+        # --- SEZNAM APLIKACÍ ---
         h_sep = QFrame()
         h_sep.setFrameShape(QFrame.Shape.HLine)
         h_sep.setFixedHeight(1)
@@ -315,58 +318,21 @@ class QueuePage(QWidget):
         self.update_selection_ui()
 
     def update_selection_ui(self):
-        count = 0
-        for i in range(self.list_widget.count()):
-            widget = self.list_widget.itemWidget(self.list_widget.item(i))
-            if isinstance(widget, QueueRowWidget) and widget.chk.isChecked():
-                count += 1
+        count = self.list_widget.count()
                 
         if count > 0:
-            self.btn_install_main.setText(f" Nainstalovat vybrané ({count})")
+            self.btn_install_main.setText(f" Nainstalovat vše ({count})")
             self.btn_install_main.setEnabled(True)
-            self.btn_remove_selected.setText(f" Odebrat vybrané ({count})")
-            self.btn_remove_selected.setEnabled(True)
         else:
-            self.btn_install_main.setText(" Nainstalovat vybrané")
+            self.btn_install_main.setText(" Nainstalovat vše")
             self.btn_install_main.setEnabled(False)
-            self.btn_remove_selected.setText(" Odebrat vybrané")
-            self.btn_remove_selected.setEnabled(False)
-
-    def remove_selected_items(self):
-        if not self.queue_data:
-            QMessageBox.warning(self, "Prázdná fronta", "V seznamu nejsou žádné balíčky k odebrání.")
-            return
-            
-        to_remove = []
-        for i in range(self.list_widget.count()):
-            widget = self.list_widget.itemWidget(self.list_widget.item(i))
-            if isinstance(widget, QueueRowWidget) and widget.chk.isChecked():
-                to_remove.append(widget.data['id'])
-                
-        if not to_remove:
-            QMessageBox.information(self, "Žádný výběr", "Nejdříve zaškrtněte balíčky k odebrání.")
-            return
-            
-        for app_id in to_remove:
-            self.remove_item_by_id(app_id)
-            
-        self.update_selection_ui()
 
     def run_installation(self):
         if not self.queue_data:
             QMessageBox.warning(self, "Prázdná fronta", "Nejdříve přidejte balíčky.")
             return
             
-        selected = []
-        for i in range(self.list_widget.count()):
-            widget = self.list_widget.itemWidget(self.list_widget.item(i))
-            if isinstance(widget, QueueRowWidget) and widget.chk.isChecked():
-                selected.append(widget.data)
-                
-        if not selected:
-            QMessageBox.information(self, "Žádný výběr", "Označte alespoň jeden balíček, který chcete nainstalovat.")
-            return
-            
+        selected = list(self.queue_data.values())
         InstallationDialog(selected, self).exec()
 
     def save_to_json(self):
@@ -375,7 +341,8 @@ class QueuePage(QWidget):
             return
         path, _ = QFileDialog.getSaveFileName(self, "Uložit frontu", "fronta.json", "JSON (*.json)")
         if path:
-            with open(path, "w", encoding="utf-8") as f: json.dump(list(self.queue_data.values()), f, indent=4, ensure_ascii=False)
+            with open(path, "w", encoding="utf-8") as f: 
+                json.dump(list(self.queue_data.values()), f, indent=4, ensure_ascii=False)
 
     def save_powershell_script(self):
         if not self.queue_data:
@@ -401,22 +368,30 @@ class QueuePage(QWidget):
             self.queue_data.clear()
             self.list_widget.clear()
             self.update_selection_ui()
-            if self.installer_page_ref: self.installer_page_ref.refresh_checkboxes()
+            if self.installer_page_ref: 
+                self.installer_page_ref.refresh_checkboxes()
 
     def load_from_json(self):
         path, _ = QFileDialog.getOpenFileName(self, "Načíst frontu", "", "JSON (*.json)")
         if path:
             try:
-                with open(path, "r", encoding="utf-8") as f: apps = json.load(f)
-                self.queue_data.clear(); self.list_widget.clear()
-                for app in apps: self.add_to_queue(app)
+                with open(path, "r", encoding="utf-8") as f: 
+                    apps = json.load(f)
+                self.queue_data.clear()
+                self.list_widget.clear()
+                for app in apps: 
+                    self.add_to_queue(app)
                 self.update_selection_ui()
-                if self.installer_page_ref: self.installer_page_ref.refresh_checkboxes()
-            except: pass
+                if self.installer_page_ref: 
+                    self.installer_page_ref.refresh_checkboxes()
+            except Exception as e: 
+                QMessageBox.critical(self, "Chyba", f"Nepodařilo se načíst soubor:\n{e}")
 
     def add_to_queue(self, data, icon=None):
         app_id = data['id']
-        if app_id in self.queue_data: return
+        if app_id in self.queue_data: 
+            return
+            
         self.queue_data[app_id] = data
         item = QListWidgetItem(self.list_widget)
         item.setSizeHint(QSize(0, 55))
@@ -425,10 +400,13 @@ class QueuePage(QWidget):
         self.list_widget.setItemWidget(item, widget)
         
         self.update_selection_ui()
-        if self.installer_page_ref: self.installer_page_ref.refresh_checkboxes()
+        if self.installer_page_ref: 
+            self.installer_page_ref.refresh_checkboxes()
 
     def remove_item_by_id(self, app_id):
-        if app_id in self.queue_data: del self.queue_data[app_id]
+        if app_id in self.queue_data: 
+            del self.queue_data[app_id]
+            
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             if item and item.data(Qt.ItemDataRole.UserRole) == app_id:
@@ -436,11 +414,13 @@ class QueuePage(QWidget):
                 break
                 
         self.update_selection_ui()
-        if self.installer_page_ref: self.installer_page_ref.refresh_checkboxes()
+        if self.installer_page_ref: 
+            self.installer_page_ref.refresh_checkboxes()
 
     def open_options_dialog(self):
         dlg = InstallationOptionsDialog(self, self.installation_options)
-        if dlg.exec(): self.installation_options = dlg.get_options()
+        if dlg.exec(): 
+            self.installation_options = dlg.get_options()
 
     def set_installer_ref(self, ref): 
         self.installer_page_ref = ref

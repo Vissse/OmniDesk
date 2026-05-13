@@ -487,7 +487,7 @@ class UpdaterPage(QWidget):
             self.list_widget.setItemWidget(item, UpdateRowWidget(u, self))
         if not updates:
             item = QListWidgetItem(self.list_widget); item.setSizeHint(QSize(0, 100))
-            l = QLabel("Všechny aplikace jsou aktuální ✨"); l.setAlignment(Qt.AlignmentFlag.AlignCenter); l.setStyleSheet("color: #666; font-size: 14px;"); self.list_widget.setItemWidget(item, l)
+            l = QLabel("Všechny aplikace jsou aktuální"); l.setAlignment(Qt.AlignmentFlag.AlignCenter); l.setStyleSheet("color: #666; font-size: 14px;"); self.list_widget.setItemWidget(item, l)
         self.update_selection_ui()
 
     def filter_updates(self, txt):

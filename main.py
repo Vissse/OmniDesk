@@ -43,6 +43,7 @@ from core.updater import AppUpdater
 from UI.view_specs import get_pc_specs
 from UI.shared_widgets import AnimatedSidebarButton
 
+
 window = None
 final_specs = None 
 
