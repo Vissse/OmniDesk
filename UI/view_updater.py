@@ -1,5 +1,6 @@
 import subprocess
 import os
+import ctypes  # PŘIDÁNO: Pro detekci administrátorských práv
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QListWidget, QListWidgetItem, 
                              QProgressBar, QFrame, QLineEdit, QFileIconProvider,
@@ -87,32 +88,55 @@ class UpdateWorker(QThread):
         try:
             if self.update_all:
                 self.log_signal.emit("\n--- HROMADNÁ AKTUALIZACE VŠECH BALÍČKŮ ---")
-                self._execute(cmd_base + ["--all", "--include-unknown"], startupinfo)
+                self._execute(cmd_base + ["--all", "--include-unknown"], startupinfo, is_spotify_or_user_app=False)
             else:
                 for aid in self.app_ids:
                     if self.is_cancelled: break
                     self.log_signal.emit(f"\n--- AKTUALIZUJI: {aid} ---")
-                    self._execute(cmd_base + ["--id", aid, "--exact"], startupinfo)
+                    
+                    # OPRAVA 1: Detekujeme, zda aktualizujeme Spotify nebo jinou problémovou "user-level" aplikaci
+                    is_spotify = "spotify" in aid.lower()
+                    
+                    self._execute(cmd_base + ["--id", aid, "--exact"], startupinfo, is_spotify_or_user_app=is_spotify)
         except Exception as e:
             self.log_signal.emit(f"Kritická chyba: {str(e)}")
             
         self.finished.emit()
 
-    def _execute(self, cmd, startupinfo):
+    def _execute(self, cmd, startupinfo, is_spotify_or_user_app=False):
         try:
+            # OPRAVA 2: Kontrola, zda OmniDesk běží s právy Administrátora
+            is_admin = False
+            if os.name == 'nt':
+                try:
+                    is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+                except:
+                    is_admin = False
+
+            # Pokud jsme Admin a instalujeme aplikaci citlivou na kontext (např. Spotify),
+            # shodíme Admin práva spuštěním přes explorer.exe
+            if is_admin and is_spotify_or_user_app:
+                # explorer.exe spustí winget v kontextu běžného přihlášeného uživatele
+                cmd = ["explorer.exe"] + cmd
+                
             self.process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, encoding='utf-8', errors='replace',
                 startupinfo=startupinfo, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
                 bufsize=1
             )
-            for line in self.process.stdout:
-                if self.is_cancelled:
-                    self.process.kill()
-                    break
-                clean_line = line.strip()
-                if clean_line:
-                    self.log_signal.emit(clean_line)
+            
+            # Pokud jsme použili explorer.exe, stdout se bohužel nedá streamovat (explorer hned skončí),
+            # proto ošetříme čtení bezpečně.
+            if self.process.stdout:
+                for line in self.process.stdout:
+                    if self.is_cancelled:
+                        try: self.process.kill()
+                        except: pass
+                        break
+                    clean_line = line.strip()
+                    if clean_line:
+                        self.log_signal.emit(clean_line)
 
             self.process.wait()
         except Exception as e:
@@ -487,7 +511,8 @@ class UpdaterPage(QWidget):
             self.list_widget.setItemWidget(item, UpdateRowWidget(u, self))
         if not updates:
             item = QListWidgetItem(self.list_widget); item.setSizeHint(QSize(0, 100))
-            l = QLabel("Všechny aplikace jsou aktuální"); l.setAlignment(Qt.AlignmentFlag.AlignCenter); l.setStyleSheet("color: #666; font-size: 14px;"); self.list_widget.setItemWidget(item, l)
+            l = QLabel("Všechny aplikace jsou aktuální"); l.setAlignment(Qt.AlignmentFlag.AlignCenter); l.setStyleSheet("color: #666; font-size: 14px;")
+            self.list_widget.setItemWidget(item, l)
         self.update_selection_ui()
 
     def filter_updates(self, txt):
@@ -498,7 +523,8 @@ class UpdaterPage(QWidget):
         count = 0
         for i in range(self.list_widget.count()):
             widget = self.list_widget.itemWidget(self.list_widget.item(i))
-            if isinstance(widget, UpdateRowWidget) and widget.chk.isChecked():
+            # OPRAVA 3: Kontrolujeme, že se jedná o UpdateRowWidget a ne o fallback QLabel při vyhledávání
+            if isinstance(widget, UpdateRowWidget) and hasattr(widget, 'chk') and widget.chk.isChecked():
                 count += 1
                 
         if count > 0:
@@ -563,4 +589,8 @@ class UpdaterPage(QWidget):
         self.show_console("HROMADNÁ AKTUALIZACE"); self.append_log("Spouštím aktualizaci všech balíčků...")
         self.status_lbl.setText("Probíhá hromadná aktualizace..."); self.list_widget.setEnabled(False)
         w = UpdateWorker(update_all=True); self.active_workers.append(w); self.current_worker = w
-        w.log_signal.connect(self.append_log); w.finished.connect(lambda: self.list_widget.setEnabled(True)); w.finished.connect(lambda: self.on_update_finished(w, "Vše")); w.start()
+        w.log_signal.connect(self.append_log)
+        
+        # OPRAVA 4: Sloučení do jedné přehledné lambda funkce, aby se předešlo duplicitám signálů
+        w.finished.connect(lambda: [self.list_widget.setEnabled(True), self.on_update_finished(w, "Vše")])
+        w.start()
