@@ -42,11 +42,11 @@ class ScanWorker(QThread):
                     continue
 
                 parts = clean_line.split()
-                
                 if len(parts) >= 4:
                     source = parts[-1]
                     new_ver = parts[-2]
                     
+                    # Detekce posunu sloupců (přítomnost znaku '<')
                     if parts[-4] == '<':
                         curr_ver = f"{parts[-4]} {parts[-3]}"
                         app_id = parts[-5]
@@ -58,6 +58,12 @@ class ScanWorker(QThread):
 
                     name = " ".join(name_parts)
                     
+                    # OCHRANA PROTI CHYBNÉMU PARSOVÁNÍ (jako např. ID="ad"):
+                    # Winget ID standardně obsahuje tečku (Publisher.App) nebo je delší než 3 znaky.
+                    # Pokud parsování vyhodí nesmysl, řádek přeskočíme.
+                    if len(app_id) <= 2 or (not "." in app_id and app_id.islower()):
+                        continue
+
                     if new_ver.lower() == "winget":
                          pass
 
@@ -79,7 +85,16 @@ class UpdateWorker(QThread):
         self.is_cancelled = False
 
     def run(self):
-        cmd_base = ["winget", "upgrade", "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements", "--verbose"]
+        cmd_base = [
+            "winget", "upgrade", 
+            "--silent", 
+            "--disable-interactivity", 
+            "--accept-package-agreements", 
+            "--accept-source-agreements", 
+            "--include-unknown",
+            "--force",
+            "--verbose"
+        ]
         
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
