@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-CURRENT_VERSION = "1.0.9"
+CURRENT_VERSION = "1.0.10"
 
 try:
     _docs_dir = Path.home() / "Documents" / "OmniDesk"

@@ -365,18 +365,33 @@ class AppUpdater(QObject):
 
     def perform_restart_6_3_logic(self, downloaded_file_path):
         try:
-            # ZMĚNA: downloaded_file_path je nyní instalační soubor z Inno Setupu
+            # Inno Setup arguments
+            # /SILENT = Shows only progress bar
+            # /SUPPRESSMSGBOXES = Suppresses unnecessary dialog windows
+            # /NOCANCEL = Prevents cancelling mid-process
+            inno_args = "/SILENT /SUPPRESSMSGBOXES /NOCANCEL"
             
-            # Parametry pro Inno Setup:
-            # /SILENT = Ukáže jen progress bar, ale uživatel nemusí nic klikat
-            # /SUPPRESSMSGBOXES = Potlačí zbytečné hlášky
-            # /NOCANCEL = Zakáže zrušení updatu uprostřed procesu
-            cmd = [downloaded_file_path, "/SILENT", "/SUPPRESSMSGBOXES", "/NOCANCEL"]
+            # Check if running on Windows and if the application is elevated (Admin)
+            import ctypes
+            is_admin = False
+            if os.name == 'nt':
+                try:
+                    is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+                except:
+                    is_admin = False
+
+            if is_admin:
+                # CRITICAL FIX: If running as admin, use explorer.exe to launch 
+                # the installer. Explorer runs in the standard user context 
+                # and drops the administrative privileges.
+                cmd = ["explorer.exe", downloaded_file_path, "/SILENT", "/SUPPRESSMSGBOXES", "/NOCANCEL"]
+                subprocess.Popen(cmd)
+            else:
+                # If running normally without admin privileges, launch directly
+                cmd = [downloaded_file_path, "/SILENT", "/SUPPRESSMSGBOXES", "/NOCANCEL"]
+                subprocess.Popen(cmd)
             
-            # Spustíme stažený instalátor
-            subprocess.Popen(cmd)
-            
-            # Okamžitě vypneme aktuální aplikaci, aby Inno Setup mohl soubory bezpečně přepsat
+            # Immediately close the current application so Inno Setup can overwrite files
             QApplication.quit()
             sys.exit()
 
