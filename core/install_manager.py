@@ -45,35 +45,70 @@ class InstallationWorker(QThread):
             app_name = app_data['name']
             app_id = app_data['id'].strip()
             
-            self.status_signal.emit(f"Instaluji: {app_name}")
-            self.log_signal.emit(f"\n> Instaluji: {app_name} ({app_id})...\n")
-
-            args = [f'--id "{app_id}"']
+            self.status_signal.emit(f"Kontrola: {app_name}")
             
-            if self.settings.get("winget_mode", "silent") == "silent":
-                args.extend(['--silent', '--disable-interactivity'])
-            else:
-                args.append('--interactive')
-
-            scope = self.settings.get("winget_scope", "machine")
-            args.append(f'--scope {scope}')
-
-            custom_location = self.settings.get("winget_location", "")
-            if custom_location:
-                args.append(f'--location "{custom_location}"')
-
-            if self.settings.get("winget_force", True):
-                args.append('--force')
-
-            if self.settings.get("winget_agreements", True):
-                args.extend(['--accept-package-agreements', '--accept-source-agreements'])
-
-            cmd = f'winget install {" ".join(args)}'
-
+            # --- 1. KONTROLA, ZDA UŽ JE APLIKACE NAINSTALOVÁNA ---
+            is_installed = False
             try:
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                 
+                # Spustíme winget list pro konkrétní ID. 
+                # Pokud winget aplikaci nenajde, vrátí chybový návratový kód (obvykle 1).
+                check_cmd = f'winget list --id "{app_id}" --exact'
+                check_process = subprocess.run(
+                    check_cmd, shell=True, 
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    startupinfo=startupinfo, creationflags=0x08000000,
+                    text=True, encoding='cp852', errors='ignore'
+                )
+                
+                # Pokud je návratový kód 0, winget aplikaci v seznamu našel
+                if check_process.returncode == 0:
+                    is_installed = True
+            except Exception as e:
+                # Pokud kontrola selže z jiného důvodu, raději budeme předpokládat, že nainstalovaná není
+                self.log_signal.emit(f"[VAROVÁNÍ] Nepodařilo se ověřit stav instalace pro {app_name}: {e}\n")
+
+            if is_installed:
+                self.log_signal.emit(f"[INFO] {app_name} ({app_id}) již je v počítači nainstalován. Přeskakuji...\n")
+                self.progress_signal.emit(i + 1)
+                continue # Skočí na další aplikaci v seznamu a tuto neinstaluje
+
+            # --- 2. SAMOTNÁ INSTALACE (Pokud aplikace nebyla nalezena) ---
+            self.status_signal.emit(f"Instaluji: {app_name}")
+            self.log_signal.emit(f"\n> Instaluji: {app_name} ({app_id})...\n")
+
+            def build_cmd(current_scope):
+                args = [f'--id "{app_id}"']
+                
+                if self.settings.get("winget_mode", "silent") == "silent":
+                    args.extend(['--silent', '--disable-interactivity'])
+                else:
+                    args.append('--interactive')
+
+                if current_scope and current_scope != 'default':
+                    args.append(f'--scope {current_scope}')
+
+                custom_location = self.settings.get("winget_location", "")
+                if custom_location:
+                    args.append(f'--location "{custom_location}"')
+
+                # DOPORUČENÍ: Pokud nechceš natvrdo vynucovat reinstalaci, 
+                # měl bys mít winget_force v nastavení defaultně na False.
+                if self.settings.get("winget_force", False):
+                    args.append('--force')
+
+                if self.settings.get("winget_agreements", True):
+                    args.extend(['--accept-package-agreements', '--accept-source-agreements'])
+
+                return f'winget install {" ".join(args)}'
+
+            scope = self.settings.get("winget_scope", "machine")
+            cmd = build_cmd(scope)
+
+            try:
+                # Spuštění prvního pokusu o instalaci
                 process = subprocess.Popen(
                     cmd, shell=True, 
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
@@ -85,21 +120,46 @@ class InstallationWorker(QThread):
                     if not self.is_running:
                         process.terminate()
                         break
-                    
                     clean_line = line.strip()
                     if not clean_line: continue
                     if any(x in clean_line for x in ['\\', '|', '/', '-', 'MB /', 'kB /', '%', '██']):
                         continue
-                        
                     self.log_signal.emit(clean_line + "\n")
 
                 process.wait()
 
-                if process.returncode == 0:
+                # Fallback mechanismus pro scope (z předchozího řešení)
+                if process.returncode != 0 and scope == "machine" and self.is_running:
+                    self.log_signal.emit(f"[INFO] Instalace jako 'machine' selhala. Zkouším výchozí scope...\n")
+                    cmd_retry = build_cmd("default")
+                    
+                    process_retry = subprocess.Popen(
+                        cmd_retry, shell=True, 
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
+                        text=True, encoding='cp852', errors='replace',
+                        startupinfo=startupinfo, creationflags=0x08000000
+                    )
+                    
+                    for line in process_retry.stdout:
+                        if not self.is_running:
+                            process_retry.terminate()
+                            break
+                        clean_line = line.strip()
+                        if not clean_line: continue
+                        if any(x in clean_line for x in ['\\', '|', '/', '-', 'MB /', 'kB /', '%', '██']):
+                            continue
+                        self.log_signal.emit(clean_line + "\n")
+                        
+                    process_retry.wait()
+                    return_code = process_retry.returncode
+                else:
+                    return_code = process.returncode
+
+                if return_code == 0:
                     self.log_signal.emit(f"[OK] {app_name} úspěšně nainstalován.\n")
                     self.create_desktop_shortcut(app_name)
                 else:
-                    self.log_signal.emit(f"[CHYBA] Selhání instalace {app_name} (kód {process.returncode}).\n")
+                    self.log_signal.emit(f"[CHYBA] Selhání instalace {app_name} (kód {return_code}).\n")
                     failed_apps.append(app_name)
 
             except Exception as e:
