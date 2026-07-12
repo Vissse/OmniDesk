@@ -1,6 +1,28 @@
 import sys
 import os
-import time 
+import time
+
+if "--set-lang" in sys.argv or "--set-theme" in sys.argv:
+    try:
+        import argparse
+        from core.settings_manager import SettingsManager
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--set-lang', type=str)
+        parser.add_argument('--set-theme', type=str)
+        args, _ = parser.parse_known_args()
+        
+        settings = SettingsManager.load_settings()
+        changed = False
+        if args.set_lang:
+            settings['language'] = args.set_lang
+            changed = True
+        if args.set_theme:
+            settings['theme'] = args.set_theme
+            changed = True
+        if changed:
+            SettingsManager.save_settings(settings)
+    except Exception as e:
+        print("Error saving CLI settings:", e)
 
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QEvent

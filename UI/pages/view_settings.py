@@ -51,10 +51,7 @@ class SettingsPage(QWidget):
         
         self.theme_combo = AnimatedComboBox()
         self.theme_combo.setFixedWidth(250)
-        self.theme_combo.addItems(list(THEMES.keys()))
-        current_theme = self.settings.get("theme", "Dark (Default)")
-        self.theme_combo.setCurrentText(current_theme if current_theme in THEMES else "Dark (Default)")
-        self.theme_combo.currentTextChanged.connect(self.save_theme)
+        self.theme_combo.currentIndexChanged.connect(self.save_theme)
         self.content_layout.addWidget(SettingRow("set_theme", "set_theme_desc", self.theme_combo))
 
         self.lang_combo = AnimatedComboBox()
@@ -137,6 +134,18 @@ class SettingsPage(QWidget):
         self.btn_about.setText(_("set_btn_about"))
         self.btn_email.setText(_("set_btn_support"))
         self.btn_paypal.setText(_("set_btn_paypal"))
+        
+        self.theme_combo.blockSignals(True)
+        self.theme_combo.clear()
+        current_theme = self.settings.get("theme", "Dark")
+        for key in THEMES.keys():
+            t_name = _(f"theme_{key.lower()}")
+            if t_name == f"theme_{key.lower()}":
+                t_name = key
+            self.theme_combo.addItem(t_name, key)
+            if key == current_theme:
+                self.theme_combo.setCurrentText(t_name)
+        self.theme_combo.blockSignals(False)
 
     # --- STYLY A LOGIKA ---
 
@@ -154,10 +163,12 @@ class SettingsPage(QWidget):
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
         """)
 
-    def save_theme(self, text):
-        self.settings["theme"] = text
-        SettingsManager.save_settings(self.settings)
-        theme_manager.set_theme(text)
+    def save_theme(self, index):
+        if index >= 0:
+            key = self.theme_combo.itemData(index)
+            self.settings["theme"] = key
+            SettingsManager.save_settings(self.settings)
+            theme_manager.set_theme(key)
 
     def save_lang(self, text):
         self.settings["language"] = text
