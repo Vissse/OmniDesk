@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve, QParallelA
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QDesktopServices, QPainterPath
 
 from core.config import COLORS
-from core.i18n import _
+from core.i18n import _, translator
 from core.config import resource_path
 from core.theme_manager import theme_manager
 from UI.shared_widgets import AnimatedActionButton, add_vertical_separator
@@ -336,9 +336,16 @@ class AppDetailPanel(QFrame):
         self.lbl_desc.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 13px; line-height: 1.4;")
 
     def update_data(self, data):
+        self.data = data
         self.lbl_title.setText(data.get('name', 'Neznámá aplikace'))
         self.lbl_id.setText(data.get('id', 'Neznámé ID'))
-        self.lbl_desc.setText(data.get('description', 'Tato aplikace zatím nemá k dispozici podrobný popis.'))
+        
+        if translator.current_lang == "Čeština":
+            desc = data.get('description_cs', data.get('description', 'Tato aplikace zatím nemá k dispozici podrobný popis.'))
+        else:
+            desc = data.get('description_en', data.get('description', 'No description available for this app.'))
+            
+        self.lbl_desc.setText(desc)
 
         icon_path = data.get('icon_url')
         if icon_path and os.path.exists(icon_path):

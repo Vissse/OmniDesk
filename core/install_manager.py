@@ -8,6 +8,7 @@ from PyQt6.QtGui import QMouseEvent, QTextCursor
 
 from core.config import COLORS
 from core.settings_manager import SettingsManager
+from core.i18n import _
 
 # --- PRACOVNÍ VLÁKNO (Instalace na pozadí) ---
 class InstallationWorker(QThread):

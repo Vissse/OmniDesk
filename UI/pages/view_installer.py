@@ -129,7 +129,11 @@ class InstallerPage(QWidget):
                 
                 clean_name = cat_name.split(' ', 1)[1] if ' ' in cat_name and len(cat_name) > 0 and not cat_name[0].isalnum() else cat_name
         
-                cat_lbl = QLabel(clean_name)
+                translated_name = _(f"cat_{clean_name}")
+                if translated_name == f"cat_{clean_name}":
+                    translated_name = clean_name
+                    
+                cat_lbl = QLabel(translated_name)
                 
                 header_layout.addWidget(cat_icon_lbl); header_layout.addWidget(cat_lbl); header_layout.addStretch()
                 c_layout.addWidget(header_container)
@@ -175,7 +179,8 @@ class InstallerPage(QWidget):
                     'widgets': cat_widgets,
                     'grid': grid,              
                     'dummies': cat_dummies,
-                    'cat_lbl': cat_lbl
+                    'cat_lbl': cat_lbl,
+                    'clean_name': clean_name
                 })
         else:
             lbl = QLabel("Pro zobrazení katalogu nastavte APP_CATEGORIES v presets.py")
@@ -235,6 +240,15 @@ class InstallerPage(QWidget):
         self.btn_install_selection.setText(_("in_btn_install_sel"))
         self.btn_settings_quick.setText(_("in_btn_settings"))
         self.btn_help.setText(_("in_btn_help"))
+        
+        for cat in self.categories_ui:
+            clean = cat['clean_name']
+            t_name = _(f"cat_{clean}")
+            if t_name == f"cat_{clean}": t_name = clean
+            cat['cat_lbl'].setText(t_name)
+            
+        if self.detail_panel.maximumHeight() > 0 and hasattr(self.detail_panel, 'data'):
+            self.detail_panel.update_data(self.detail_panel.data)
 
     def show_app_details(self, data):
         self.detail_panel.update_data(data)

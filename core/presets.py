@@ -37,7 +37,9 @@ if os.path.exists(CATALOG_FILE):
                     "id": app_data.get("id", ""),
                     "website": app_data.get("website", ""),
                     "icon_url": icon_path,
-                    "description": app_data.get("description", "Popis není k dispozici.")
+                    "description": app_data.get("description", "Popis není k dispozici."),
+                    "description_en": app_data.get("description_en", app_data.get("description", "No description available.")),
+                    "description_cs": app_data.get("description_cs", app_data.get("description", "Popis není k dispozici."))
                 })
             
             APP_CATEGORIES[category_name] = processed_apps
