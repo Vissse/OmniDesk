@@ -25,7 +25,7 @@ def get_stylesheet():
     QListWidget#Sidebar::item:selected {{
         background-color: {COLORS['item_hover']};
         border-left: 3px solid {COLORS['accent']};
-        color: white;
+        color: {COLORS['fg']};
     }}
     QListWidget#Sidebar::item:hover {{
         background-color: {COLORS['item_hover']};
@@ -62,7 +62,7 @@ def get_stylesheet():
         border: 1px solid {COLORS['border']};
         border-radius: 4px;
         padding: 5px;
-        color: white;
+        color: {COLORS['fg']};
     }}
     QLineEdit:focus {{
         border: 1px solid {COLORS['accent']};
@@ -76,7 +76,7 @@ def get_stylesheet():
         margin: 0;
     }}
     QScrollBar::handle:vertical {{
-        background: #424242;
+        background: {COLORS['border']};
         min-height: 20px;
         border-radius: 5px;
     }}

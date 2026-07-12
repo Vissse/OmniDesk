@@ -6,44 +6,16 @@ from PyQt6.QtCore import Qt
 
 from core.config import COLORS, THEMES, CURRENT_VERSION
 from core.settings_manager import SettingsManager
+from core.i18n import _, translator
+from core.theme_manager import theme_manager
 
 # Import našich animovaných widgetů ze sdíleného souboru (přidán add_vertical_separator)
 from UI.shared_widgets import AnimatedActionButton, AnimatedComboBox, add_vertical_separator
 
 # --- POMOCNÉ WIDGETY ---
 
-class SectionHeader(QLabel):
-    def __init__(self, text):
-        super().__init__(text)
-        self.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {COLORS['sub_text']}; margin-top: 25px; margin-bottom: 10px;")
 
-class Separator(QFrame):
-    def __init__(self):
-        super().__init__()
-        self.setFrameShape(QFrame.Shape.HLine)
-        self.setStyleSheet(f"background-color: {COLORS['border']}; margin-top: 15px; margin-bottom: 15px;")
-        self.setFixedHeight(1)
-
-class SettingRow(QWidget):
-    def __init__(self, title, description, widget):
-        super().__init__()
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 10, 0, 10)
-        
-        text_layout = QVBoxLayout()
-        lbl_title = QLabel(title)
-        lbl_title.setStyleSheet("font-size: 14px; font-weight: bold; color: white;")
-        lbl_desc = QLabel(description)
-        lbl_desc.setWordWrap(True)
-        lbl_desc.setStyleSheet(f"font-size: 12px; color: {COLORS['sub_text']};")
-        text_layout.addWidget(lbl_title)
-        text_layout.addWidget(lbl_desc)
-        
-        layout.addLayout(text_layout, stretch=1)
-        layout.addSpacing(20)
-        layout.addWidget(widget)
-
-# --- HLAVNÍ STRÁNKA NASTAVENÍ ---
+from UI.components.settings_components import SectionHeader, Separator, SettingRow
 
 class SettingsPage(QWidget):
     def __init__(self, updater=None): 
@@ -59,7 +31,7 @@ class SettingsPage(QWidget):
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        self._style_scrollbar()
+
 
         # Obsah nastavení
         self.content_widget = QWidget()
@@ -71,12 +43,11 @@ class SettingsPage(QWidget):
 
         # === ZAHÁJENÍ OBSAHU ===
 
-        lbl_main = QLabel("Nastavení")
-        lbl_main.setStyleSheet("font-size: 28px; font-weight: bold; color: white; margin-bottom: 20px;")
-        self.content_layout.addWidget(lbl_main)
+        self.lbl_main = QLabel()
+        self.content_layout.addWidget(self.lbl_main)
 
         # --- 1. SEKCE: VZHLED ---
-        self.content_layout.addWidget(SectionHeader("Vzhled a Jazyk"))
+        self.content_layout.addWidget(SectionHeader("set_appearance"))
         
         self.theme_combo = AnimatedComboBox()
         self.theme_combo.setFixedWidth(250)
@@ -84,7 +55,7 @@ class SettingsPage(QWidget):
         current_theme = self.settings.get("theme", "Dark (Default)")
         self.theme_combo.setCurrentText(current_theme if current_theme in THEMES else "Dark (Default)")
         self.theme_combo.currentTextChanged.connect(self.save_theme)
-        self.content_layout.addWidget(SettingRow("Barevný motiv", "Vyberte si světlý nebo tmavý režim.", self.theme_combo))
+        self.content_layout.addWidget(SettingRow("set_theme", "set_theme_desc", self.theme_combo))
 
         self.lang_combo = AnimatedComboBox()
         self.lang_combo.setFixedWidth(250)
@@ -93,21 +64,21 @@ class SettingsPage(QWidget):
         current_lang = self.settings.get("language", "Čeština")
         self.lang_combo.setCurrentText(current_lang if current_lang in languages else "Čeština")
         self.lang_combo.currentTextChanged.connect(self.save_lang)
-        self.content_layout.addWidget(SettingRow("Jazyk aplikace", "Změna se projeví po restartu.", self.lang_combo))
+        self.content_layout.addWidget(SettingRow("set_lang", "set_lang_desc", self.lang_combo))
         
         self.content_layout.addWidget(Separator())
 
         # --- 2. SEKCE: SYSTÉM ---
-        self.content_layout.addWidget(SectionHeader("Systém"))
+        self.content_layout.addWidget(SectionHeader("set_system"))
         
-        btn_update = AnimatedActionButton(" Zkontrolovat aktualizace", "assets/images/arrows-clockwise-thin.png")
+        self.btn_update = AnimatedActionButton("", "assets/images/arrows-clockwise-thin.png")
         if self.updater:
-            btn_update.clicked.connect(lambda: self.updater.check_for_updates(silent=False))
+            self.btn_update.clicked.connect(lambda: self.updater.check_for_updates(silent=False))
         else:
-            btn_update.clicked.connect(lambda: QMessageBox.warning(self, "Chyba", "Modul aktualizací není dostupný."))
-            btn_update.setEnabled(False)
+            self.btn_update.clicked.connect(lambda: QMessageBox.warning(self, _("error_title"), _("update_na")))
+            self.btn_update.setEnabled(False)
             
-        self.content_layout.addWidget(SettingRow("Aktualizace", "Zkontrolujte dostupnost nové verze programu OmniDesk.", btn_update))
+        self.content_layout.addWidget(SettingRow("set_update", "set_update_desc", self.btn_update))
 
         # Odsazení, aby obsah neutíkal dolů
         self.content_layout.addStretch()
@@ -117,12 +88,10 @@ class SettingsPage(QWidget):
         main_layout.addWidget(self.scroll_area)
 
         # --- HORIZONTÁLNÍ PATIČKA (O aplikaci, Podpora, PayPal) ---
-        footer_widget = QWidget()
-        footer_widget.setObjectName("SettingsFooter")
-        # Jemná čára nahoře, která patičku oddělí od zbytku obsahu
-        footer_widget.setStyleSheet(f"#SettingsFooter {{ background-color: {COLORS['bg_main']}; border-top: 1px solid {COLORS['border']}; }}")
+        self.footer_widget = QWidget()
+        self.footer_widget.setObjectName("SettingsFooter")
         
-        footer_layout = QHBoxLayout(footer_widget)
+        footer_layout = QHBoxLayout(self.footer_widget)
         footer_layout.setContentsMargins(40, 15, 40, 15)
         footer_layout.setSpacing(20)
         
@@ -130,40 +99,56 @@ class SettingsPage(QWidget):
         footer_layout.addStretch()
 
         # Tlačítko: O aplikaci
-        btn_about = AnimatedActionButton(" O aplikaci", "assets/images/info-thin.png")
-        btn_about.clicked.connect(self.show_about_dialog)
-        footer_layout.addWidget(btn_about)
+        self.btn_about = AnimatedActionButton("", "assets/images/info-thin.png")
+        self.btn_about.clicked.connect(self.show_about_dialog)
+        footer_layout.addWidget(self.btn_about)
 
         # --- Oddělovač ---
         add_vertical_separator(footer_layout)
 
         # Tlačítko: Podpora
-        btn_email = AnimatedActionButton(" Podpora", "assets/images/envelope-simple-thin.png")
-        btn_email.clicked.connect(lambda: webbrowser.open("mailto:vit.sebestik@gmail.com?subject=OmniDesk - Podpora"))
-        footer_layout.addWidget(btn_email)
+        self.btn_email = AnimatedActionButton("", "assets/images/envelope-simple-thin.png")
+        self.btn_email.clicked.connect(lambda: webbrowser.open("mailto:vit.sebestik@gmail.com?subject=OmniDesk - Podpora"))
+        footer_layout.addWidget(self.btn_email)
 
         # --- Oddělovač ---
         add_vertical_separator(footer_layout)
 
         # Tlačítko: PayPal
-        btn_paypal = AnimatedActionButton(" Podpořit přes PayPal", "assets/images/paypal-logo-thin.png")
-        btn_paypal.clicked.connect(lambda: webbrowser.open("https://paypal.me/Vissse"))
-        footer_layout.addWidget(btn_paypal)
+        self.btn_paypal = AnimatedActionButton("", "assets/images/paypal-logo-thin.png")
+        self.btn_paypal.clicked.connect(lambda: webbrowser.open("https://paypal.me/Vissse"))
+        footer_layout.addWidget(self.btn_paypal)
 
         # Stretch zprava
         footer_layout.addStretch()
 
         # Přidáme patičku fixně úplně nakonec stránky (mimo ScrollArea)
-        main_layout.addWidget(footer_widget)
+        main_layout.addWidget(self.footer_widget)
         
+        translator.language_changed.connect(self.retranslate_ui)
+        self.retranslate_ui()
+        
+        theme_manager.theme_changed.connect(self.update_style)
+        self.update_style()
+
+    def retranslate_ui(self):
+        self.lbl_main.setText(_("set_title"))
+        self.btn_update.setText(_("set_btn_update"))
+        self.btn_about.setText(_("set_btn_about"))
+        self.btn_email.setText(_("set_btn_support"))
+        self.btn_paypal.setText(_("set_btn_paypal"))
 
     # --- STYLY A LOGIKA ---
 
-    def _style_scrollbar(self):
+    def update_style(self):
+        self.content_widget.setStyleSheet(f"background-color: {COLORS['bg_main']};")
+        self.lbl_main.setStyleSheet(f"font-size: 28px; font-weight: bold; color: {COLORS['fg']}; margin-bottom: 20px;")
+        self.footer_widget.setStyleSheet(f"#SettingsFooter {{ background-color: {COLORS['bg_main']}; border-top: 1px solid {COLORS['border']}; }}")
+        
         self.scroll_area.setStyleSheet(f"""
             QScrollArea {{ background-color: transparent; border: none; }}
-            QScrollBar:vertical {{ border: none; background-color: {COLORS['bg_main']}; width: 8px; margin: 0px; border-radius: 4px; }}
-            QScrollBar::handle:vertical {{ background-color: #444; min-height: 20px; border-radius: 4px; }}
+            QScrollBar:vertical {{ border: none; background-color: transparent; width: 8px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background-color: {COLORS['border']}; min-height: 20px; border-radius: 4px; }}
             QScrollBar::handle:vertical:hover {{ background-color: {COLORS['accent']}; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
@@ -172,22 +157,35 @@ class SettingsPage(QWidget):
     def save_theme(self, text):
         self.settings["theme"] = text
         SettingsManager.save_settings(self.settings)
+        theme_manager.set_theme(text)
 
     def save_lang(self, text):
         self.settings["language"] = text
         SettingsManager.save_settings(self.settings)
+        translator.set_language(text)
 
     def show_about_dialog(self):
         msg = QMessageBox(self)
-        msg.setWindowTitle("O aplikaci")
+        msg.setWindowTitle(_("about_title"))
         
-        msg.setText(f"<h3 style='color: {COLORS['fg']}; margin-bottom: 5px;'>OmniDesk</h3><p style='margin-top: 0px;'>Verze: {CURRENT_VERSION}</p>")
+        msg.setText(f"<h3 style='color: {COLORS['fg']}; margin-bottom: 5px;'>OmniDesk</h3><p style='margin-top: 0px;'>v{CURRENT_VERSION}</p>")
         msg.setInformativeText(
-            "Moderní správce systému a aplikací.\n\n"
-            "Vytvořeno s láskou pro zjednodušení každodenní práce na PC.\n\n"
-            "Autor: Vít Šebestík / Visse\n"
-            "© 2026 Všechna práva vyhrazena."
+            f"{_('about_desc1')}\n\n"
+            f"{_('about_desc2')}\n\n"
+            f"{_('about_author')} Vít Šebestík / Visse\n"
+            f"© 2026 {_('about_rights')}"
         )
+        
+        try:
+            from ctypes import windll, byref, c_int
+            hwnd = msg.winId().__int__()
+            windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, byref(c_int(1)), 4)
+            color_hex = COLORS['bg_main'].lstrip('#')
+            r, g, b = int(color_hex[0:2], 16), int(color_hex[2:4], 16), int(color_hex[4:6], 16)
+            dwm_color = (b << 16) | (g << 8) | r
+            windll.dwmapi.DwmSetWindowAttribute(hwnd, 35, byref(c_int(dwm_color)), 4)
+            windll.dwmapi.DwmSetWindowAttribute(hwnd, 36, byref(c_int(0x00FFFFFF)), 4)
+        except: pass
         
         # Stylování do motivu
         msg.setStyleSheet(f"""

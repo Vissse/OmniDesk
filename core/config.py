@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-CURRENT_VERSION = "1.0.12"
+CURRENT_VERSION = "1.0.13"
 
 try:
     _docs_dir = Path.home() / "Documents" / "OmniDesk"
@@ -34,25 +34,25 @@ THEMES = {
         "border": "#3e3e42"
     },
     "Light": {
-        "bg_main": "#ffffff",
-        "bg_sidebar": "#f3f3f3",
-        "fg": "#000000",
-        "sub_text": "#666666",
+        "bg_main": "#f8f9fa",      # Světle šedé pozadí hlavní plochy
+        "bg_sidebar": "#ffffff",   # Bílé pozadí levého menu
+        "fg": "#212529",           # Tmavě šedý/černý text
+        "sub_text": "#6c757d",     # Světlejší šedý text
         "input_bg": "#ffffff",
-        "accent": "#007acc",
-        "accent_hover": "#005a9e",
-        "danger": "#d83b01",
-        "danger_hover": "#b03001", # PŘIDÁNO: Tmavší červená pro kontrast
-        "success": "#107c10",
-        "success_hover": "#0d6b0d",# PŘIDÁNO: Tmavší zelená pro kontrast
-        "item_bg": "#ffffff",
-        "item_hover": "#e1e1e1",
-        "border": "#cccccc"
+        "accent": "#0d6efd",       # Výraznější modrá
+        "accent_hover": "#0b5ed7",
+        "danger": "#dc3545",
+        "danger_hover": "#bb2d3b",
+        "success": "#198754",
+        "success_hover": "#157347",
+        "item_bg": "#ffffff",      # Bílé pozadí karet a prvků
+        "item_hover": "#e9ecef",   # Jemná šedá po přejetí
+        "border": "#dee2e6"        # Zřetelné jemné okraje
     }
 }
 
 # --- 2. NAČTENÍ AKTIVNÍHO TÉMATU ---
-# Defaultně nastavíme Dark
+# Inicializujeme prázdný slovník, který se naplní z THEMES
 COLORS = THEMES["Dark"].copy()
 
 

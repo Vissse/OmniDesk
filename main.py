@@ -11,29 +11,32 @@ def global_exception_handler(exctype, value, tb):
     import traceback
     error_msg = "".join(traceback.format_exception(exctype, value, tb))
     print(error_msg)
-    msg = QMessageBox()
-    msg.setIcon(QMessageBox.Icon.Critical)
-    msg.setWindowTitle("Kritická chyba")
-    msg.setText("Aplikace narazila na kritickou chybu.")
-    msg.setDetailedText(error_msg)
-    msg.exec()
+    if QApplication.instance():
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Critical)
+        msg.setWindowTitle("Kritická chyba")
+        msg.setText("Aplikace narazila na kritickou chybu.")
+        msg.setDetailedText(error_msg)
+        msg.exec()
     sys.exit(1)
 
 sys.excepthook = global_exception_handler
 
-class GlobalKeyFilter(QObject):
+class SnippingToolFilter(QObject):
     def eventFilter(self, obj, event):
-        # Zachytíme pouze stisky kláves
-        if event.type() == QEvent.Type.KeyPress:
-            if event.key() in (Qt.Key.Key_Print, 16777222):
-                event.ignore()
-                return True # Řekneme Qt, ať už s tím nic nedělá a nechá to na Windows
+        # Print Screen generuje v Qt na Windows událost KeyRelease, nikoliv KeyPress!
+        if event.type() == QEvent.Type.KeyRelease:
+            if event.key() == Qt.Key.Key_Print or event.key() == 16777222:
+                import os
+                os.system("start ms-screenclip:")
+                return True
         return super().eventFilter(obj, event)
 
 # Importy
 from core.config import resource_path
+from core.i18n import _
 from UI.splash import SplashScreen
-from UI.view_specs import get_pc_specs
+from UI.pages.view_specs import get_pc_specs
 from UI.main_window import MainWindow
 
 window = None
@@ -45,21 +48,21 @@ class InitWorker(QThread):
     def run(self):
         global final_specs
         try:
-            self.progress_update.emit(10, "Načítání konfigurace...")
+            self.progress_update.emit(10, _("splash_config"))
             time.sleep(0.2)
             
-            self.progress_update.emit(20, "Inicializace HW skeneru...")
+            self.progress_update.emit(20, _("splash_hw"))
             def hw_progress(msg):
                 self.progress_update.emit(50, msg)
                 
             final_specs = get_pc_specs(progress_callback=hw_progress) 
             
-            self.progress_update.emit(90, "Příprava rozhraní...")
+            self.progress_update.emit(90, _("splash_ui"))
             time.sleep(0.2)
         except Exception as e:
             print(f"Chyba při inicializaci HW: {e}")
         finally:
-            self.progress_update.emit(100, "Spouštím aplikaci!")
+            self.progress_update.emit(100, _("splash_start"))
 
 def show_main_window():
     QApplication.instance().setQuitOnLastWindowClosed(True)
@@ -79,10 +82,10 @@ if __name__ == "__main__":
 
     app = QApplication(sys.argv)
 
-    # ---- PŘIDÁNO: Globální filtr pro Print Screen ----
-    key_filter = GlobalKeyFilter()
-    app.installEventFilter(key_filter)
-    
+    # Globální zachytávač Print Screen
+    snip_filter = SnippingToolFilter()
+    app.installEventFilter(snip_filter)
+
     # Nevypínej celou aplikaci jen proto, že zmizel Splash Screen
     app.setQuitOnLastWindowClosed(False)
     

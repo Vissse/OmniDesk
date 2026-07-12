@@ -5,6 +5,7 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QPixmap, QColor
 
 from core.config import COLORS, CURRENT_VERSION, resource_path
+from core.i18n import _
 
 class SplashScreen(QWidget):
     finished = pyqtSignal()
@@ -62,7 +63,7 @@ class SplashScreen(QWidget):
         inner_layout.addWidget(lbl_title)
         
         # --- VERZE (Nyní decentní šedá) ---
-        lbl_ver = QLabel(f"Verze {CURRENT_VERSION}")
+        lbl_ver = QLabel(f"v{CURRENT_VERSION}")
         lbl_ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_ver.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 12px; font-weight: 500; border: none;")
         inner_layout.addWidget(lbl_ver)
@@ -70,7 +71,7 @@ class SplashScreen(QWidget):
         inner_layout.addStretch()
         
         # --- STATUS TEXT ---
-        self.lbl_status = QLabel("Inicializace...")
+        self.lbl_status = QLabel(_("splash_init"))
         self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_status.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 11px; border: none;")
         inner_layout.addWidget(self.lbl_status)

@@ -15,6 +15,7 @@ from PyQt6.QtGui import QMouseEvent, QColor, QIcon
 # Konfigurace
 try:
     from core.config import CURRENT_VERSION, COLORS, resource_path
+    from core.i18n import _
 except ImportError:
     CURRENT_VERSION = "0.0.0"
     COLORS = {'bg_main': '#1e1e1e', 'bg_sidebar': '#252526', 'accent': '#0078d4', 'text': '#ffffff', 'border': '#333', 'sub_text': '#aaaaaa'}
@@ -191,7 +192,7 @@ class UpdateDownloadDialog(QDialog):
         layout.setContentsMargins(40, 30, 40, 30)
         layout.setSpacing(15)
         
-        self.lbl_info = QLabel("Stahuji aktualizaci...")
+        self.lbl_info = QLabel(_("upd_downloading"))
         self.lbl_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_info.setStyleSheet("font-weight: bold; font-size: 16px;")
         layout.addWidget(self.lbl_info)
@@ -320,21 +321,21 @@ class AppUpdater(QObject):
                         self.prompt_update(tag, assets[0]["browser_download_url"], assets[0].get("size", 0))
                     else:
                         if not self.silent:
-                            dlg = ModernMessageDialog(self.parent, "Chyba", "Nová verze nemá .exe soubor.")
+                            dlg = ModernMessageDialog(self.parent, _("error_title"), _("upd_err_noexe"))
                             dlg.exec()
                 else:
                     if not self.silent:
                         dlg = ModernMessageDialog(
                             self.parent, 
-                            "Jste aktuální", 
-                            f"Verze {CURRENT_VERSION} je nejnovější.<br>Žádné aktualizace nejsou k dispozici."
+                            _("upd_uptodate_title"), 
+                            _("upd_uptodate_msg").format(ver=CURRENT_VERSION)
                         )
                         dlg.exec()
             except Exception as e:
                 print(e)
         
         elif res['status'] == 'error' and not self.silent:
-             dlg = ModernMessageDialog(self.parent, "Chyba připojení", f"Nelze ověřit aktualizace.\n\n{res['msg']}")
+             dlg = ModernMessageDialog(self.parent, _("upd_err_conn"), _("upd_err_check").format(msg=res["msg"]))
              dlg.exec()
 
         if proceed and self.on_continue:
@@ -345,9 +346,9 @@ class AppUpdater(QObject):
             # Díky tomu je dialog zcela nezávislý na skrytém hlavním okně
             dlg = ModernMessageDialog(
                 None, 
-                "Nová aktualizace", 
-                f"Je k dispozici nová verze OmniDesk {ver}.<br>Přejete si ji nainstalovat?",
-                btn_text="Aktualizovat",
+                _("upd_new_title"), 
+                _("upd_new_msg").format(ver=ver),
+                btn_text=_("upd_btn_update"),
                 show_cancel=True
             )
             

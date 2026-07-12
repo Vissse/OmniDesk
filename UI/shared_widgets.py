@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QPushButton, QFrame, QComboBox, QListView
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QVariantAnimation, QRect, QSize
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QPainterPath, QImage
 from core.config import COLORS, resource_path
+from core.theme_manager import theme_manager
 
 class AnimatedSidebarButton(QPushButton):
     def __init__(self, text, icon_path, parent=None):
@@ -21,6 +22,7 @@ class AnimatedSidebarButton(QPushButton):
         self.anim.setStartValue(0.0)
         self.anim.setEndValue(1.0)
         self.anim.valueChanged.connect(self._animate_step)
+        theme_manager.theme_changed.connect(lambda: self.update_visuals())
         self.update_visuals()
 
     def set_active(self, active):
@@ -42,7 +44,9 @@ class AnimatedSidebarButton(QPushButton):
         is_highlighted = self.active or hover
         color_hex = COLORS['fg'] if is_highlighted else COLORS['sub_text']
         
-        # Písmo dědí velikost ze zbytku aplikace a padding je srovnán s QListWidget
+        if self.active:
+            self._bg_color = QColor(COLORS['item_bg'])
+        
         self.setStyleSheet(f"""
             QPushButton {{
                 background: transparent; 
@@ -54,11 +58,24 @@ class AnimatedSidebarButton(QPushButton):
             }}
         """)
         
-        # Ikona se nenačítá uměle obarvená, zachovává se její nativní vzhled a velikost 24x24
+        # Zbarvení ikony podle stavu tlačítka
+        icon_color_hex = COLORS['accent'] if self.active else color_hex
         full_icon_path = resource_path(self.icon_path)
         if os.path.exists(full_icon_path):
-            self.setIcon(QIcon(full_icon_path))
+            pix = QPixmap(full_icon_path)
+            if not pix.isNull():
+                canvas = QPixmap(pix.size())
+                canvas.fill(Qt.GlobalColor.transparent)
+                p = QPainter(canvas)
+                p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+                p.drawPixmap(0, 0, pix)
+                p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+                p.fillRect(canvas.rect(), QColor(icon_color_hex))
+                p.end()
+                self.setIcon(QIcon(canvas))
             self.setIconSize(QSize(24, 24))
+            
+        self.update()
 
     def enterEvent(self, event):
         if not self.active:
@@ -135,6 +152,7 @@ class AnimatedActionButton(QPushButton):
         self.anim.setStartValue(0.0)
         self.anim.setEndValue(1.0)
         self.anim.valueChanged.connect(self._animate_step)
+        theme_manager.theme_changed.connect(self.update_visual_state)
         self.update_visual_state()
 
     def get_colored_icon(self, color_hex):
@@ -155,6 +173,20 @@ class AnimatedActionButton(QPushButton):
         self.update_visual_state()
 
     def update_visual_state(self):
+        self.setStyleSheet(f"""
+            QPushButton {{ 
+                background: transparent; 
+                color: {COLORS['fg']}; 
+                border: none; 
+                padding: 0 15px; 
+                font-weight: bold; 
+                font-size: 10pt; 
+                text-align: left;
+            }}
+            QPushButton:disabled {{ 
+                color: {COLORS['sub_text']}; 
+            }}
+        """)
         if self.isEnabled():
             self.setCursor(Qt.CursorShape.PointingHandCursor)
             if self.icon_path:
@@ -253,12 +285,19 @@ class IconDownloadWorker(QThread):
                             self.loaded.emit(pixmap); return
             except: pass
 
+class VerticalSeparator(QFrame):
+    def __init__(self):
+        super().__init__()
+        self.setFrameShape(QFrame.Shape.VLine)
+        self.setFixedWidth(1)
+        self.setFixedHeight(18)
+        theme_manager.theme_changed.connect(self.update_style)
+        self.update_style()
+    def update_style(self):
+        self.setStyleSheet(f"background: {COLORS['border']}; border: none;")
+
 def add_vertical_separator(layout):
-    sep = QFrame()
-    sep.setFrameShape(QFrame.Shape.VLine)
-    sep.setFixedWidth(1)
-    sep.setFixedHeight(18)
-    sep.setStyleSheet(f"background: {COLORS['border']}; border: none;")
+    sep = VerticalSeparator()
     layout.addWidget(sep)
 
 class AnimatedComboBox(QComboBox):
@@ -274,7 +313,11 @@ class AnimatedComboBox(QComboBox):
         view = QListView()
         view.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setView(view)
-        
+        theme_manager.theme_changed.connect(self.update_style)
+        self.update_style()
+
+    def update_style(self):
+        self._bg_color = QColor(COLORS["input_bg"])
         # Zrušíme výchozí pozadí/rámeček combo boxu - budeme ho kreslit sami v paintEvent
         self.setStyleSheet(f"""
             QComboBox {{ 

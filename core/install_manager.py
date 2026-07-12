@@ -267,7 +267,7 @@ class InstallationDialog(QDialog):
         title_layout = QHBoxLayout(title_bar)
         title_layout.setContentsMargins(20, 0, 20, 0)
         
-        lbl_title = QLabel("Průběh instalace")
+        lbl_title = QLabel(_("inst_prog_title"))
         lbl_title.setStyleSheet("color: white; font-weight: 500; font-size: 13px; background: transparent; border: none;")
         title_layout.addWidget(lbl_title)
         title_layout.addStretch()

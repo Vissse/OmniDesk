@@ -1,4 +1,4 @@
-import os
+﻿import os
 import winreg
 
 def find_main_exe_in_folder(folder):

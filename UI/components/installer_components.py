@@ -7,7 +7,9 @@ from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve, QParallelA
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QDesktopServices, QPainterPath
 
 from core.config import COLORS
+from core.i18n import _
 from core.config import resource_path
+from core.theme_manager import theme_manager
 from UI.shared_widgets import AnimatedActionButton, add_vertical_separator
 
 try:
@@ -116,7 +118,7 @@ class QueueToggleButton(QPushButton):
             if self._hover:
                 bg_color = danger_color
                 border_color = danger_color
-                icon_color = QColor("white")
+                icon_color = QColor(COLORS['fg'])
             else:
                 bg_color = QColor("transparent")
                 border_color = danger_color
@@ -129,7 +131,7 @@ class QueueToggleButton(QPushButton):
             else:
                 bg_color = QColor(COLORS.get('item_bg', '#3e3e42'))
                 border_color = QColor("transparent")
-            icon_color = QColor("white")
+            icon_color = QColor(COLORS['fg'])
             current_icon = self.icon_plus
             
         if bg_color.alpha() > 0:
@@ -163,7 +165,7 @@ class QueueToggleButton(QPushButton):
 class InstallationOptionsDialog(QDialog):
     def __init__(self, parent=None, current_options=None):
         super().__init__(parent)
-        self.setWindowTitle("Možnosti instalace")
+        self.setWindowTitle(_("inst_opt_title"))
         self.setMinimumWidth(600)
         self.setMinimumHeight(400)
         self.setStyleSheet(f"""
@@ -184,33 +186,33 @@ class InstallationOptionsDialog(QDialog):
 
         tab_general = QWidget(); layout_gen = QVBoxLayout(tab_general)
         layout_gen.setContentsMargins(20, 20, 20, 20); layout_gen.setSpacing(15)
-        self.chk_admin = QCheckBox("Spustit jako správce")
-        self.chk_interactive = QCheckBox("Interaktivní instalace")
-        self.chk_hash = QCheckBox("Přeskočit kontrolní součet")
+        self.chk_admin = QCheckBox(_("inst_opt_admin"))
+        self.chk_interactive = QCheckBox(_("inst_opt_interactive"))
+        self.chk_hash = QCheckBox(_("inst_opt_hash"))
         layout_gen.addWidget(self.chk_admin); layout_gen.addWidget(self.chk_interactive); layout_gen.addWidget(self.chk_hash)
         layout_gen.addSpacing(10); line = QFrame(); line.setFrameShape(QFrame.Shape.HLine); line.setStyleSheet(f"background-color: {COLORS['border']}; border: none;"); layout_gen.addWidget(line)
-        layout_gen.addSpacing(10); lbl_ver = QLabel("Verze:")
-        self.combo_version = QComboBox(); self.combo_version.addItems(["Poslední (Latest)", "Zeptat se při instalaci"])
+        layout_gen.addSpacing(10); lbl_ver = QLabel(_("inst_opt_ver"))
+        self.combo_version = QComboBox(); self.combo_version.addItems([_("inst_opt_latest"), _("inst_opt_ask")])
         layout_gen.addWidget(lbl_ver); layout_gen.addWidget(self.combo_version)
-        self.chk_ignore_updates = QCheckBox("Ignorovat budoucí aktualizace tohoto balíčku")
+        self.chk_ignore_updates = QCheckBox(_("inst_opt_ignore"))
         layout_gen.addWidget(self.chk_ignore_updates); layout_gen.addStretch()
-        self.tabs.addTab(tab_general, "Obecné / Verze")
+        self.tabs.addTab(tab_general, _("inst_opt_tab_gen"))
 
         tab_arch = QWidget(); layout_arch = QVBoxLayout(tab_arch)
         layout_arch.setContentsMargins(20, 20, 20, 20); layout_arch.setSpacing(15)
-        lbl_arch = QLabel("Architektura:")
-        self.combo_arch = QComboBox(); self.combo_arch.addItems(["Výchozí", "x64", "x86", "arm64"])
+        lbl_arch = QLabel(_("inst_opt_arch"))
+        self.combo_arch = QComboBox(); self.combo_arch.addItems([_("inst_opt_default"), "x64", "x86", "arm64"])
         layout_arch.addWidget(lbl_arch); layout_arch.addWidget(self.combo_arch)
-        lbl_scope = QLabel("Rozsah instalace:")
-        self.combo_scope = QComboBox(); self.combo_scope.addItems(["Výchozí (User/Machine)", "User (Pouze pro mě)", "Machine (Pro všechny)"])
+        lbl_scope = QLabel(_("inst_opt_scope"))
+        self.combo_scope = QComboBox(); self.combo_scope.addItems([_("inst_opt_scope_def"), _("inst_opt_scope_user"), _("inst_opt_scope_mach")])
         layout_arch.addWidget(lbl_scope); layout_arch.addWidget(self.combo_scope)
-        lbl_path = QLabel("Umístění instalace:"); path_layout = QHBoxLayout()
-        self.path_edit = QLineEdit(); self.path_edit.setPlaceholderText("Nenastaveno nebo neznámo (Výchozí)")
-        btn_path = QPushButton("Vybrat"); btn_path.setCursor(Qt.CursorShape.PointingHandCursor)
+        lbl_path = QLabel(_("inst_opt_path")); path_layout = QHBoxLayout()
+        self.path_edit = QLineEdit(); self.path_edit.setPlaceholderText(_("inst_opt_path_def"))
+        btn_path = QPushButton(_("inst_opt_btn_sel")); btn_path.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_path.clicked.connect(self.select_path); btn_path.setStyleSheet(f"background: {COLORS['item_bg']}; color: {COLORS['accent']}; border: none; font-weight: bold;")
         path_layout.addWidget(self.path_edit); path_layout.addWidget(btn_path)
         layout_arch.addWidget(lbl_path); layout_arch.addLayout(path_layout); layout_arch.addStretch()
-        self.tabs.addTab(tab_arch, "Architektura a umístění")
+        self.tabs.addTab(tab_arch, _("inst_opt_tab_arch"))
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept); buttons.rejected.connect(self.reject)
@@ -224,7 +226,7 @@ class InstallationOptionsDialog(QDialog):
             self.path_edit.setText(current_options.get("path", ""))
 
     def select_path(self):
-        d = QFileDialog.getExistingDirectory(self, "Vybrat složku pro instalaci")
+        d = QFileDialog.getExistingDirectory(self, _("inst_opt_sel_dir"))
         if d: self.path_edit.setText(d)
 
     def get_options(self):
@@ -259,17 +261,17 @@ class AppDetailPanel(QFrame):
         title_id_layout = QHBoxLayout()
         title_id_layout.setSpacing(10)
         
-        self.lbl_title = QLabel("Název")
+        self.lbl_title = QLabel(_("inst_name"))
         self.lbl_title.setStyleSheet(f"font-weight: bold; font-size: 18px; color: {COLORS['fg']};")
         
-        self.lbl_id = QLabel("ID")
+        self.lbl_id = QLabel(_("inst_id"))
         self.lbl_id.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 12px; font-family: Consolas, monospace;")
         
         self.current_url = ""
         self.btn_web = HoverButton("", "assets/images/globe-thin.png", "accent", hover_style="accent_hover")
         self.btn_web.setFixedSize(24, 24)
         self.btn_web.setIconSize(QSize(20, 20))
-        self.btn_web.setToolTip("Otevřít webové stránky")
+        self.btn_web.setToolTip(_("inst_tt_web"))
         self.btn_web.clicked.connect(self.open_website)
         
         title_id_layout.addWidget(self.lbl_title)
@@ -283,8 +285,8 @@ class AppDetailPanel(QFrame):
         scroll_desc.setWidgetResizable(True)
         scroll_desc.setStyleSheet(f"""
             QScrollArea {{ border: none; background: transparent; }}
-            QScrollBar:vertical {{ border: none; background: transparent; width: 4px; margin: 0px; }}
-            QScrollBar::handle:vertical {{ background: #555555; border-radius: 2px; min-height: 20px; }}
+            QScrollBar:vertical {{ border: none; background: transparent; width: 6px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background: {COLORS['border']}; border-radius: 2px; min-height: 20px; }}
             QScrollBar::handle:vertical:hover {{ background: {COLORS.get('accent', '#0078d4')}; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; border: none; background: transparent; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; border: none; }}
@@ -294,7 +296,7 @@ class AppDetailPanel(QFrame):
         desc_layout = QVBoxLayout(desc_container)
         desc_layout.setContentsMargins(0, 5, 20, 0)
         
-        self.lbl_desc = QLabel("Zde se zobrazí popis aplikace.")
+        self.lbl_desc = QLabel(_("inst_def_desc"))
         self.lbl_desc.setWordWrap(True)
         self.lbl_desc.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self.lbl_desc.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 13px; line-height: 1.4;")
@@ -318,6 +320,21 @@ class AppDetailPanel(QFrame):
         
         self.layout.addLayout(right_layout)
 
+        theme_manager.theme_changed.connect(self.update_style)
+        self.update_style()
+
+    def update_style(self):
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {COLORS['bg_sidebar']};
+                border-top: 1px solid {COLORS['border']};
+            }}
+            QLabel {{ border: none; background: transparent; }}
+        """)
+        self.lbl_title.setStyleSheet(f"font-weight: bold; font-size: 18px; color: {COLORS['fg']};")
+        self.lbl_id.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 12px; font-family: Consolas, monospace;")
+        self.lbl_desc.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 13px; line-height: 1.4;")
+
     def update_data(self, data):
         self.lbl_title.setText(data.get('name', 'Neznámá aplikace'))
         self.lbl_id.setText(data.get('id', 'Neznámé ID'))
@@ -329,7 +346,7 @@ class AppDetailPanel(QFrame):
             self.lbl_icon.setPixmap(pix)
         else:
             self.lbl_icon.setText("📦")
-            self.lbl_icon.setStyleSheet("font-size: 64px; color: #555; background: transparent;")
+            self.lbl_icon.setStyleSheet(f"font-size: 64px; color: {COLORS['sub_text']}; background: transparent;")
 
         website = data.get('website', '')
         self.current_url = website
@@ -370,13 +387,12 @@ class CompactAppWidget(QWidget):
             self.icon_lbl.setPixmap(pix)
         else:
             self.icon_lbl.setText("📦")
-            self.icon_lbl.setStyleSheet("color: #888; font-size: 16px; background: transparent;")
+        self.icon_lbl.setStyleSheet(f"color: {COLORS['sub_text']}; font-size: 16px; background: transparent;")
             
         layout.addWidget(self.icon_lbl)
         
-        name_lbl = QLabel(data['name'])
-        name_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: white; background: transparent;")
-        layout.addWidget(name_lbl, stretch=1)
+        self.name_lbl = QLabel(data['name'])
+        layout.addWidget(self.name_lbl, stretch=1)
         
         self.btn_pick = QueueToggleButton()
         self.btn_pick.clicked.connect(self.toggle_queue)
@@ -390,6 +406,12 @@ class CompactAppWidget(QWidget):
         self.anim.setStartValue(0.0)
         self.anim.setEndValue(1.0)
         self.anim.valueChanged.connect(self._animate_step)
+
+        theme_manager.theme_changed.connect(self.update_style)
+        self.update_style()
+
+    def update_style(self):
+        self.name_lbl.setStyleSheet(f"font-size: 14px; font-weight: 500; color: {COLORS['fg']}; background: transparent;")
 
     def _animate_step(self, val):
         self._bar_height_factor = val
@@ -453,277 +475,3 @@ class CompactAppWidget(QWidget):
             self.is_queued = is_checked
             self.btn_pick.set_queued(self.is_queued)
 
-class InstallerPage(QWidget):
-    def __init__(self, queue_page_ref):
-        super().__init__()
-        self.queue_page = queue_page_ref
-        self.installation_options = {}
-
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0); main_layout.setSpacing(0)
-
-        top_bar = QWidget()
-        top_bar.setStyleSheet(f"background-color: {COLORS['bg_main']}; border-bottom: 1px solid {COLORS['border']};")
-        top_layout = QHBoxLayout(top_bar)
-        top_layout.setContentsMargins(20, 15, 20, 15)
-        
-        lbl_title = QLabel("Katalog aplikací")
-        lbl_title.setStyleSheet("font-size: 14pt; font-weight: bold; color: white; border: none; outline: none;")
-        top_layout.addWidget(lbl_title); top_layout.addSpacing(20)
-
-        self.search_container = QFrame()
-        self.search_container.setFixedWidth(700); self.search_container.setFixedHeight(38)
-        self.search_container.setStyleSheet(f"QFrame {{ background-color: {COLORS['input_bg']}; border: 1px solid {COLORS['border']}; border-radius: 6px; }} QFrame:focus-within {{ border: 1px solid {COLORS['accent']}; }}")
-        search_cont_layout = QHBoxLayout(self.search_container)
-        search_cont_layout.setContentsMargins(10, 0, 5, 0); search_cont_layout.setSpacing(0)
-
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Hledat v katalogu...")
-        self.search_input.setStyleSheet("border: none; background: transparent; color: white; font-size: 10pt;")
-        self.search_input.textChanged.connect(self.filter_catalog)
-        
-        self.btn_search = HoverButton("", "assets/images/magnifying-glass-thin.png", "fg")
-        self.btn_search.setFixedSize(32, 32); self.btn_search.setIconSize(QSize(18, 18))
-        self.btn_search.setStyleSheet("background: transparent; border: none; padding: 0;")
-
-        search_cont_layout.addWidget(self.search_input); search_cont_layout.addWidget(self.btn_search)
-        top_layout.addWidget(self.search_container); top_layout.addStretch()
-        main_layout.addWidget(top_bar)
-
-        action_bar = QWidget()
-        action_bar.setStyleSheet(f"background-color: {COLORS['bg_main']};")
-        action_layout = QHBoxLayout(action_bar)
-        action_layout.setContentsMargins(20, 10, 20, 10); action_layout.setSpacing(10)
-
-        self.btn_install_selection = AnimatedActionButton(" Nainstalovat vybrané", "assets/images/download-simple-thin.png")
-        self.btn_install_selection.clicked.connect(self.run_install_from_bar)
-        action_layout.addWidget(self.btn_install_selection)
-
-        add_vertical_separator(action_layout)
-
-        self.btn_settings_quick = AnimatedActionButton(" Nastavení instalace", "assets/images/gear-six-thin.png")
-        self.btn_settings_quick.clicked.connect(self.open_options_dialog)
-        action_layout.addWidget(self.btn_settings_quick)
-        
-        action_layout.addStretch()
-
-        self.btn_help = HoverButton(" Nápověda", "assets/images/question-thin.png", "sub_text")
-        self.btn_help.setIconSize(QSize(20, 20)); self.btn_help.clicked.connect(self.show_help)
-        action_layout.addWidget(self.btn_help)
-        
-        main_layout.addWidget(action_bar)
-
-        h_sep = QFrame()
-        h_sep.setFrameShape(QFrame.Shape.HLine)
-        h_sep.setFixedHeight(1)
-        h_sep.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
-        main_layout.addWidget(h_sep)
-
-        self.split_layout = QVBoxLayout()
-        self.split_layout.setContentsMargins(0, 0, 0, 0)
-        self.split_layout.setSpacing(0)
-
-        self.catalog_widget = QWidget()
-        catalog_layout = QVBoxLayout(self.catalog_widget)
-        catalog_layout.setContentsMargins(30, 10, 30, 10)
-        
-        catalog_scroll = QScrollArea()
-        catalog_scroll.setWidgetResizable(True)
-        catalog_scroll.setStyleSheet(f"""
-            QScrollArea {{ border: none; background-color: transparent; }}
-            QScrollBar:vertical {{ border: none; background-color: transparent; width: 8px; margin: 0px; }}
-            QScrollBar::handle:vertical {{ background-color: {COLORS.get('accent', '#0078d4')}; min-height: 30px; border-radius: 4px; }}
-            QScrollBar::handle:vertical:hover {{ background-color: {COLORS.get('accent_hover', '#1f8ad2')}; }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: none; }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
-        """)
-        
-        catalog_content = QWidget()
-        catalog_content.setStyleSheet("background-color: transparent;")
-        c_layout = QVBoxLayout(catalog_content)
-        c_layout.setContentsMargins(0, 0, 15, 0)
-        
-        self.categories_ui = []
-        self.catalog_widgets = [] 
-
-        if APP_CATEGORIES:
-            for cat_name, app_list in APP_CATEGORIES.items():
-                sorted_apps = sorted(app_list, key=lambda x: x['name'].lower())
-                
-                header_container = QWidget(); header_layout = QHBoxLayout(header_container)
-                header_layout.setContentsMargins(0, 25, 0, 5); header_layout.setSpacing(10)
-                
-                cat_icon_lbl = QLabel(); cat_icon_lbl.setFixedSize(20, 20)
-                icon_file = CATEGORY_ICONS.get(cat_name, "")
-                
-                if icon_file:
-                    icon_path = resource_path(icon_file) 
-                    if os.path.exists(icon_path):
-                        pix = QPixmap(icon_path).scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                        cat_icon_lbl.setPixmap(pix)
-                
-                clean_name = cat_name.split(' ', 1)[1] if ' ' in cat_name and len(cat_name) > 0 and not cat_name[0].isalnum() else cat_name
-                cat_lbl = QLabel(clean_name); cat_lbl.setStyleSheet(f"font-size: 15px; font-weight: bold; color: {COLORS['fg']};")
-                
-                header_layout.addWidget(cat_icon_lbl); header_layout.addWidget(cat_lbl); header_layout.addStretch()
-                c_layout.addWidget(header_container)
-                
-                separator = QFrame(); separator.setFixedHeight(1)
-                separator.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
-                c_layout.addWidget(separator)
-                
-                grid = QGridLayout()
-                grid.setContentsMargins(0, 15, 0, 0)
-                grid.setHorizontalSpacing(30)
-                grid.setVerticalSpacing(5)
-                grid.setColumnStretch(0, 1)
-                grid.setColumnStretch(1, 1)
-                
-                cat_widgets = []
-                cat_dummies = [] 
-                
-                num_apps = len(sorted_apps)
-                num_rows = (num_apps + 1) // 2 
-                
-                for idx, app in enumerate(sorted_apps):
-                    w = CompactAppWidget(app, self)
-                    self.catalog_widgets.append(w)
-                    cat_widgets.append(w)
-                    
-                    col = idx // num_rows
-                    row = idx % num_rows
-                    grid.addWidget(w, row, col)
-                
-                total_cells = num_rows * 2
-                for empty_idx in range(num_apps, total_cells):
-                    col = empty_idx // num_rows
-                    row = empty_idx % num_rows
-                    # I zde přidáme rodiče
-                    dummy = QWidget(self.catalog_widget) 
-                    grid.addWidget(dummy, row, col)
-                    cat_dummies.append(dummy)
-                        
-                c_layout.addLayout(grid)
-                self.categories_ui.append({
-                    'header': header_container, 
-                    'separator': separator, 
-                    'widgets': cat_widgets,
-                    'grid': grid,              
-                    'dummies': cat_dummies    
-                })
-        else:
-            lbl = QLabel("Pro zobrazení katalogu nastavte APP_CATEGORIES v presets.py")
-            lbl.setStyleSheet("color: #888;")
-            c_layout.addWidget(lbl)
-            
-        c_layout.addStretch()
-        catalog_scroll.setWidget(catalog_content)
-        catalog_layout.addWidget(catalog_scroll)
-
-        self.split_layout.addWidget(self.catalog_widget, stretch=1)
-
-        self.detail_panel = AppDetailPanel(self)
-        self.detail_panel.btn_close.clicked.connect(self.hide_app_details)
-        self.split_layout.addWidget(self.detail_panel)
-
-        main_layout.addLayout(self.split_layout, stretch=1)
-
-        self.panel_anim_group = QParallelAnimationGroup()
-        self.anim_min = QPropertyAnimation(self.detail_panel, b"minimumHeight")
-        self.anim_max = QPropertyAnimation(self.detail_panel, b"maximumHeight")
-        self.anim_min.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self.anim_max.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self.panel_anim_group.addAnimation(self.anim_min)
-        self.panel_anim_group.addAnimation(self.anim_max)
-
-    def show_app_details(self, data):
-        self.detail_panel.update_data(data)
-        if self.detail_panel.maximumHeight() == 0:
-            self.anim_min.setDuration(350)
-            self.anim_max.setDuration(350)
-            self.anim_min.setStartValue(0)
-            self.anim_min.setEndValue(160)
-            self.anim_max.setStartValue(0)
-            self.anim_max.setEndValue(160)
-            self.panel_anim_group.start()
-
-    def hide_app_details(self):
-        self.anim_min.setDuration(350)
-        self.anim_max.setDuration(350)
-        self.anim_min.setStartValue(160)
-        self.anim_min.setEndValue(0)
-        self.anim_max.setStartValue(160)
-        self.anim_max.setEndValue(0)
-        self.panel_anim_group.start()
-
-    def filter_catalog(self):
-        query = self.search_input.text().strip().lower()
-        for cat in self.categories_ui:
-            grid = cat['grid']
-            
-            visible_widgets = []
-            for w in cat['widgets']:
-                if query in w.data['name'].lower() or query in w.data['id'].lower():
-                    w.show()
-                    visible_widgets.append(w)
-                else:
-                    w.hide()
-                    # ZÁSADNÍ OPRAVA: Odstraníme skrytý widget z mřížky,
-                    # aby QGridLayout přestal držet prázdné místo pro staré řádky.
-                    grid.removeWidget(w)
-            
-            for d in cat['dummies']:
-                d.hide()
-                # ZÁSADNÍ OPRAVA i pro výplňové dummy widgety
-                grid.removeWidget(d)
-                
-            num_apps = len(visible_widgets)
-            
-            if num_apps > 0:
-                num_rows = (num_apps + 1) // 2 
-                
-                for idx, w in enumerate(visible_widgets):
-                    col = idx // num_rows
-                    row = idx % num_rows
-                    # Přidáním do gridu si QGridLayout widget automaticky znovu převezme
-                    grid.addWidget(w, row, col)
-                
-                total_cells = num_rows * 2
-                dummy_needed = total_cells - num_apps
-                
-                if dummy_needed > 0:
-                    if not cat['dummies']:
-                        # Zde ponechán rodič (z předchozí opravy), aby nevznikal popup okno
-                        cat['dummies'].append(QWidget(self.catalog_widget))
-                    d = cat['dummies'][0]
-                    # I dummy widgety nejprve přidáme do rozvržení a až pak zobrazíme
-                    grid.addWidget(d, num_rows - 1, 1)
-                    d.show()
-
-            # DOPLŇKOVÁ OPRAVA: Pokud je kategorie zcela prázdná, zrušíme i její okraje
-            if num_apps == 0:
-                cat['header'].hide()
-                cat['separator'].hide()
-                grid.setContentsMargins(0, 0, 0, 0)
-            else:
-                cat['header'].show()
-                cat['separator'].show()
-                grid.setContentsMargins(0, 15, 0, 0)
-
-    def refresh_catalog_checkboxes(self):
-        for widget in self.catalog_widgets: widget.set_checked_state(widget.data['id'] in self.queue_page.queue_data)
-            
-    def refresh_checkboxes(self): self.refresh_catalog_checkboxes()
-
-    def run_install_from_bar(self):
-        if not self.queue_page.queue_data:
-            QMessageBox.warning(self, "Prázdná fronta", "Vyberte nejprve balíčky z katalogu.")
-            return
-        self.queue_page.run_installation()
-
-    def open_options_dialog(self):
-        dlg = InstallationOptionsDialog(self, self.installation_options)
-        if dlg.exec(): self.installation_options = dlg.get_options()
-
-    def show_help(self):
-        QMessageBox.information(self, "Nápověda", "Vyberte aplikace z katalogu pomocí tlačítek. Výběr se automaticky přidá do fronty. K dispozici je také lokální vyhledávací pole nahoře pro rychlé filtrování.")

@@ -10,16 +10,18 @@ from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter, QPainterPath
 from core.config import COLORS, resource_path
 from UI import styles
 from core.updater import AppUpdater
+from core.i18n import _, translator
+from core.theme_manager import theme_manager
 
 # Import všech stránek (Views)
-from UI.view_home import HomePage
-from UI.view_specs import SpecsPage
-from UI.view_uninstaller import UninstallerPage
-from UI.view_installer import InstallerPage
-from UI.view_settings import SettingsPage
-from UI.view_health import HealthCheckPage
-from UI.view_updater import UpdaterPage
-from UI.view_queue import QueuePage
+from UI.pages.view_home import HomePage
+from UI.pages.view_specs import SpecsPage
+from UI.pages.view_uninstaller import UninstallerPage
+from UI.pages.view_installer import InstallerPage
+from UI.pages.view_settings import SettingsPage
+from UI.pages.view_health import HealthCheckPage
+from UI.pages.view_updater import UpdaterPage
+from UI.pages.view_queue import QueuePage
 from UI.shared_widgets import AnimatedSidebarButton
 
 class AnimatedListWidget(QListWidget):
@@ -114,14 +116,25 @@ class SidebarDelegate(QStyledItemDelegate):
         badge_rect = QRect(option.rect.right() - 45, option.rect.top() + (option.rect.height() - 18) // 2, tw + 14, 18)
         painter.setPen(Qt.PenStyle.NoPen); painter.setBrush(QColor(COLORS['accent']))
         painter.drawRoundedRect(badge_rect, 9, 9)
-        painter.setPen(QColor("white")); painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, count_str)
+        painter.setPen(Qt.GlobalColor.white)
+        painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, count_str)
         painter.restore()
 
 class MainWindow(QMainWindow):
     def __init__(self, specs=None):
         super().__init__()
         self.pc_specs = specs
-        self.setWindowTitle("OmniDesk"); self.resize(1150, 750)
+        self.setWindowTitle("OmniDesk")
+        from PyQt6.QtWidgets import QApplication
+        screen = QApplication.primaryScreen().availableGeometry()
+        
+        ideal_w, ideal_h = 1150, 750
+        max_w = int(screen.width() * 0.9)
+        max_h = int(screen.height() * 0.9)
+        
+        w = min(ideal_w, max_w)
+        h = min(ideal_h, max_h)
+        self.resize(w, h)
         icon_path = resource_path("assets/icons/program_icon.png")
         if os.path.exists(icon_path): self.setWindowIcon(QIcon(icon_path))
         self.apply_custom_title_bar()
@@ -132,43 +145,42 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0); main_layout.setSpacing(0)
 
-        sidebar_container = QWidget()
-        sidebar_container.setFixedWidth(260)
-        sidebar_container.setStyleSheet(f"background-color: {COLORS['bg_sidebar']}; border-right: 1px solid {COLORS['border']};")
-        sidebar_layout = QVBoxLayout(sidebar_container); sidebar_layout.setContentsMargins(0, 0, 0, 0); sidebar_layout.setSpacing(0)
+        self.sidebar_container = QWidget()
+        self.sidebar_container.setFixedWidth(260)
+        
+        sidebar_layout = QVBoxLayout(self.sidebar_container); sidebar_layout.setContentsMargins(0, 0, 0, 0); sidebar_layout.setSpacing(0)
 
         self.sidebar_list = AnimatedListWidget()
         self.sidebar_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.sidebar_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.sidebar_delegate = SidebarDelegate(self.sidebar_list); self.sidebar_list.setItemDelegate(self.sidebar_delegate)
-        self.sidebar_list.setStyleSheet(f"QListWidget {{ background-color: transparent; border: none; outline: none; margin-top: 15px; }} QListWidget::item {{ padding: 12px 10px; margin: 2px 10px; border-radius: 6px; color: {COLORS['sub_text']}; font-weight: 500; }} QListWidget::item:selected {{ background-color: {COLORS['item_bg']}; color: {COLORS['fg']}; border-left: none; }} QListWidget::item:hover {{ background-color: {COLORS['item_hover']}; color: {COLORS['fg']}; }}")
         self.sidebar_list.setIconSize(QSize(24, 24))
         self.sidebar_list.itemSelectionChanged.connect(self.on_selection_changed)
         self.sidebar_list.itemClicked.connect(self.on_sidebar_click)
 
-        self.add_sidebar_item("Přehled", "assets/images/house-simple-thin.png", 0)
+        self.add_sidebar_item("nav_home", "assets/images/house-simple-thin.png", 0)
         self.add_sidebar_separator()
-        self.add_sidebar_item("Katalog aplikací", "assets/images/package-thin.png", 1)
-        self.add_sidebar_item("Instalační fronta", "assets/images/tray-arrow-down-thin.png", 7)
+        self.add_sidebar_item("nav_catalog", "assets/images/package-thin.png", 1)
+        self.add_sidebar_item("nav_queue", "assets/images/tray-arrow-down-thin.png", 7)
         self.add_sidebar_separator()
-        self.add_sidebar_item("Aktualizace aplikací", "assets/images/arrows-clockwise-thin.png", 2)
-        self.add_sidebar_item("Odinstalace aplikací", "assets/images/trash-simple-thin.png", 4)
+        self.add_sidebar_item("nav_updates", "assets/images/arrows-clockwise-thin.png", 2)
+        self.add_sidebar_item("nav_uninstall", "assets/images/trash-simple-thin.png", 4)
         self.add_sidebar_separator()
-        self.add_sidebar_item("Kontrola stavu PC", "assets/images/heartbeat-thin.png", 3)
-        self.add_sidebar_item("Specifikace PC", "assets/images/desktop-thin.png", 6)
+        self.add_sidebar_item("nav_health", "assets/images/heartbeat-thin.png", 3)
+        self.add_sidebar_item("nav_specs", "assets/images/desktop-thin.png", 6)
 
         sidebar_layout.addWidget(self.sidebar_list); sidebar_layout.addSpacing(20) 
-        sep_frame = QFrame(); sep_frame.setFixedHeight(1); sep_frame.setStyleSheet(f"background-color: {COLORS['border']}; margin: 0 15px;")
-        sidebar_layout.addWidget(sep_frame); sidebar_layout.addSpacing(10)
+        self.sep_frame = QFrame(); self.sep_frame.setFixedHeight(1)
+        sidebar_layout.addWidget(self.sep_frame); sidebar_layout.addSpacing(10)
 
-        self.btn_settings = AnimatedSidebarButton(" Nastavení", "assets/images/gear-thin.png")
+        self.btn_settings = AnimatedSidebarButton("", "assets/images/gear-thin.png")
         self.btn_settings.clicked.connect(self.go_to_settings)
         
         btn_container = QHBoxLayout()
         btn_container.setContentsMargins(0, 0, 0, 15)
         btn_container.addWidget(self.btn_settings)
         sidebar_layout.addLayout(btn_container)
-        main_layout.addWidget(sidebar_container)
+        main_layout.addWidget(self.sidebar_container)
 
         self.pages = QStackedWidget(); main_layout.addWidget(self.pages)
         self.queue_page = QueuePage(); self.updater_page = UpdaterPage()
@@ -183,11 +195,61 @@ class MainWindow(QMainWindow):
         self.rotation_anim = QVariantAnimation(self); self.rotation_anim.setDuration(1200); self.rotation_anim.setStartValue(0); self.rotation_anim.setEndValue(360); self.rotation_anim.setLoopCount(-1); self.rotation_anim.valueChanged.connect(self.rotate_sidebar_icon)
         self.updater_page.scan_finished_signal.connect(self.update_sidebar_badge)
         QTimer.singleShot(2000, self.start_initial_scan)
+        
+        translator.language_changed.connect(self.retranslate_ui)
+        self.retranslate_ui()
+        
+        theme_manager.theme_changed.connect(self.update_style)
+        self.update_style()
+
+    def update_style(self):
+        self.sidebar_container.setStyleSheet(f"background-color: {COLORS['bg_sidebar']}; border-right: none;")
+        self.sidebar_list.setStyleSheet(f"QListWidget {{ background-color: transparent; border: none; outline: none; margin-top: 15px; }} QListWidget::item {{ padding: 12px 10px; margin: 2px 10px; border-radius: 6px; color: {COLORS['sub_text']}; font-weight: 500; }} QListWidget::item:selected {{ background-color: {COLORS['item_bg']}; color: {COLORS['fg']}; border-left: none; }} QListWidget::item:hover {{ background-color: {COLORS['item_hover']}; color: {COLORS['fg']}; }}")
+        self.sep_frame.setStyleSheet(f"background-color: {COLORS['border']}; margin: 0 15px;")
+        self._recolor_sidebar_icons()
+        try: self.setStyleSheet(styles.get_stylesheet())
+        except: pass
+        
+        # Aplikace barvy horního panelu (Windows DWM) až s drobným zpožděním, 
+        # aby se synchronizovalo překreslení těžkého stylesheetu s okamžitým API voláním
+        QTimer.singleShot(10, self.apply_custom_title_bar)
+
+    def _recolor_sidebar_icons(self):
+        for i in range(self.sidebar_list.count()):
+            item = self.sidebar_list.item(i)
+            icon_path_str = item.data(Qt.ItemDataRole.UserRole + 3)
+            if icon_path_str:
+                full_path = resource_path(icon_path_str)
+                if os.path.exists(full_path):
+                    pix = QPixmap(full_path)
+                    if not pix.isNull():
+                        canvas = QPixmap(pix.size())
+                        canvas.fill(Qt.GlobalColor.transparent)
+                        p = QPainter(canvas)
+                        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+                        p.drawPixmap(0, 0, pix)
+                        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+                        
+                        is_selected = (self.sidebar_list.currentRow() == i)
+                        color = COLORS['accent'] if is_selected else COLORS['sub_text']
+                        
+                        p.fillRect(canvas.rect(), QColor(color))
+                        p.end()
+                        item.setIcon(QIcon(canvas))
+
+    def retranslate_ui(self):
+        for i in range(self.sidebar_list.count()):
+            item = self.sidebar_list.item(i)
+            text_key = item.data(Qt.ItemDataRole.UserRole + 2)
+            if text_key:
+                item.setText(_(text_key))
+        self.btn_settings.setText(" " + _("nav_settings"))
 
     def on_selection_changed(self):
         for row in list(self.sidebar_delegate.animations.keys()):
             if row != self.sidebar_list.currentRow(): self.sidebar_delegate.animations[row] = 0.0
         self.sidebar_list.update()
+        self._recolor_sidebar_icons()
 
     def start_initial_scan(self):
         self.rotation_anim.start(); self.updater_page.scan_updates()
@@ -209,11 +271,15 @@ class MainWindow(QMainWindow):
         for i in range(self.sidebar_list.count()):
             item = self.sidebar_list.item(i)
             if item.data(Qt.ItemDataRole.UserRole) == 2:
-                item.setIcon(QIcon(resource_path("assets/images/arrows-clockwise-thin.png")))
                 item.setData(Qt.ItemDataRole.UserRole + 1, count); break
+        self._recolor_sidebar_icons()
 
-    def add_sidebar_item(self, text, icon_relative_path, index):
-        item = QListWidgetItem(text); item.setData(Qt.ItemDataRole.UserRole, index); item.setData(Qt.ItemDataRole.UserRole + 1, 0)
+    def add_sidebar_item(self, text_key, icon_relative_path, index):
+        item = QListWidgetItem(_(text_key))
+        item.setData(Qt.ItemDataRole.UserRole, index)
+        item.setData(Qt.ItemDataRole.UserRole + 1, 0)
+        item.setData(Qt.ItemDataRole.UserRole + 2, text_key)
+        item.setData(Qt.ItemDataRole.UserRole + 3, icon_relative_path)
         full_icon_path = resource_path(icon_relative_path)
         if os.path.exists(full_icon_path): item.setIcon(QIcon(full_icon_path))
         self.sidebar_list.addItem(item)

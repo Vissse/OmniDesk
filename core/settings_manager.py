@@ -1,4 +1,4 @@
-# settings_manager.py
+﻿# settings_manager.py
 import json
 import os
 from core.config import SETTINGS_FILE
